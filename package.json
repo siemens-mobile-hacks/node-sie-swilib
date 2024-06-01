@@ -1,0 +1,16 @@
+{
+	"name": "@sie-js/swilib",
+	"version": "1.0.0",
+	"type": "module",
+	"main": "src/index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"pub": "npm publish --access public"
+	},
+	"author": "",
+	"license": "MIT",
+	"description": "Working with swilib.vkp patch.",
+	"dependencies": {
+		"@sie-js/vkp": "^1.0.6"
+	}
+}
