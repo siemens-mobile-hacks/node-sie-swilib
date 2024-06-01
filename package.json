@@ -12,5 +12,8 @@
 	"description": "Working with swilib.vkp patch.",
 	"dependencies": {
 		"@sie-js/vkp": "^1.0.6"
+	},
+	"repository": {
+		"url": "git+https://github.com/siemens-mobile-hacks/node-sie-swilib.git"
 	}
 }
