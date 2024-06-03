@@ -2,15 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import child_process from 'child_process';
 import { vkpRawParser, VkpParseError, vkpNormalize } from '@sie-js/vkp';
-import SWILIB_CONFIG from './config.js';
+import swilibConfig from './config.js';
 
-export function getSwilibConfig() {
-	return SWILIB_CONFIG;
-}
+export { swilibConfig };
 
-export function isELFLoaderFunction(swiNumber) {
-	return SWILIB_CONFIG.builtin.includes(swiNumber);
-}
+export const SwiType = {
+	EMPTY:		0,
+	FUNCTION:	1,
+	POINTER:	2,
+	VALUE:		3,
+};
+
+const functionPairs = getFunctionPairs();
 
 export function parseSwilibPatch(code) {
 	let offset = null;
@@ -47,6 +50,7 @@ export function parseSwilibPatch(code) {
 
 			let id = data.address / 4;
 			entries[id] = { id, value, symbol };
+			entries[id].type = detectSwilibEntryType(entries[id]);
 		},
 		onError(e) {
 			throw new Error(`${e.message}\n${e.codeFrame(code)}`);
@@ -238,9 +242,90 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 				table[swiNumber].name = table[swiNumber].functions[0].name;
 			}
 		}
+
+		// Analyze type
+		table[swiNumber].type = detectSdkEntryType(table[swiNumber]);
 	}
 
 	return table;
+}
+
+export function analyzeSwilib(platform, sdklib, swilib) {
+	let maxFunctionId = Math.max(sdklib.length, swilib.entries.length);
+	let errors = {};
+	let duplicates = {};
+	let missing = [];
+	let goodCnt = 0;
+	let totalCnt = 0;
+	let unusedCnt = 0;
+
+	for (let id = 0; id < maxFunctionId; id++) {
+		let func = swilib.entries[id];
+		if (!sdklib[id] && !func) {
+			unusedCnt++;
+			continue;
+		}
+
+		totalCnt++;
+
+		if (!sdklib[id] && func) {
+			errors[id] = `Unknown function: ${func.symbol}`;
+			continue;
+		}
+
+		if (functionPairs[id]) {
+			let masterFunc = swilib.entries[functionPairs[id][0]];
+			if (masterFunc && (!func || masterFunc.value != func.value)) {
+				let expectedValue = masterFunc.value.toString(16).padStart(8, '0').toUpperCase();
+				errors[id] = `Address must be equal with #${formatId(masterFunc.id)} ${masterFunc.symbol} (0x${expectedValue}).`;
+			}
+		}
+
+		if (sdklib[id] && !func) {
+			if (!(id in swilibConfig.builtin))
+				missing.push(id);
+			continue;
+		}
+
+		if (swilibConfig.builtin[id]?.includes(platform) && func) {
+			errors[id] = `Reserved by ELFLoader (${sdklib[id].symbol}).`;
+			continue;
+		}
+
+		if (swilibConfig.platformDependentFunctions[id]?.includes(platform) && func) {
+			errors[id] = `Functions is not available on this platform.`;
+			continue;
+		}
+
+		if (!isSameFunctions(sdklib[id], func)) {
+			errors[id] = `Invalid function: ${func.symbol}`;
+			continue;
+		}
+
+		if ((BigInt(func.value) & 0xF0000000n) == 0xA0000000n) {
+			if (duplicates[func.value]) {
+				let dupId = duplicates[func.value];
+				if (!functionPairs[func.id] || !functionPairs[func.id].includes(dupId))
+					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib[dupId].symbol}.`;
+			}
+		}
+
+		if (!errors[id] && func.type != sdklib[id].type) {
+			errors[id] = `Type mismatch: swilib entry is ${getSwiTypeName(func.type)}, but expected ${getSwiTypeName(sdklib[id].type)} (SDK)`;
+		}
+
+		if (!errors[id])
+			goodCnt++;
+	}
+
+	let stat = {
+		bad: Object.keys(errors).length,
+		good: goodCnt,
+		missing: missing.length,
+		total: totalCnt,
+		unused: unusedCnt
+	};
+	return { errors, missing, stat };
 }
 
 export function compareSwilibFunc(swiNumber, oldName, newName) {
@@ -250,6 +335,45 @@ export function compareSwilibFunc(swiNumber, oldName, newName) {
 	if (aliases)
 		return aliases.includes(oldName);
 	return false;
+}
+
+function detectSdkEntryType(entry) {
+	if (swilibConfig.forcePointers.includes(entry.id))
+		return SwiType.POINTER;
+	if (!entry.functions.length) {
+		if (entry.name.match(/^[\w\d\s]+\s([\w\d]+)\s*\(\s*(void)?\s*\)/i)) {
+			return SwiType.VALUE;
+		} else {
+			return SwiType.POINTER;
+		}
+	}
+	return SwiType.FUNCTION;
+}
+
+function detectSwilibEntryType(entry) {
+	if (entry != null && entry.value != 0xFFFFFFFF) {
+		let addr = BigInt(entry.value) & 0xFF000000n;
+		if (addr >= 0xA0000000n && addr < 0xA8000000n) {
+			if (swilibConfig.forcePointers.includes(entry.id))
+				return SwiType.POINTER;
+			return SwiType.FUNCTION;
+		} else if (addr >= 0xA8000000n && addr < 0xB0000000n) {
+			return SwiType.POINTER;
+		} else {
+			return SwiType.VALUE;
+		}
+	}
+	return SwiType.EMPTY;
+}
+
+export function getSwiTypeName(type) {
+	switch (type) {
+		case SwiType.EMPTY:		return "EMPTY";
+		case SwiType.FUNCTION:	return "FIRMWARE_FUNCTION";
+		case SwiType.POINTER:	return "RAM_POINTER";
+		case SwiType.VALUE:		return "NUMERIC_VALUE";
+	}
+	return "???";
 }
 
 function parseSwilibFuncName(comm) {
@@ -287,4 +411,44 @@ function parsePatternsFuncName(comm) {
 		return m[1];
 	}
 	throw new Error(`Invalid function: ${comm}`);
+}
+
+function formatId(id) {
+	return (+id).toString(16).padStart(3, 0).toUpperCase();
+}
+
+function isSameFunctions(targetFunc, checkFunc) {
+	if (!targetFunc && !checkFunc)
+		return true;
+	if (!targetFunc || !checkFunc)
+		return false;
+	if (targetFunc.id != checkFunc.id)
+		return false;
+	if (targetFunc.symbol == checkFunc.symbol)
+		return true;
+	if (isStrInArray(targetFunc.aliases, checkFunc.symbol))
+		return true;
+	if (isStrInArray(swilibConfig.aliases[+targetFunc.id], checkFunc.symbol))
+		return true;
+	return false;
+}
+
+function getFunctionPairs() {
+	let functionPairs = {};
+	for (let p of swilibConfig.pairs) {
+		for (let i = 0; i < p.length; i++)
+			functionPairs[p[i]] = p;
+	}
+	return functionPairs;
+}
+
+function isStrInArray(arr, search) {
+	if (arr) {
+		search = search.toLowerCase();
+		for (let word of arr) {
+			if (word.toLowerCase() === search)
+				return true;
+		}
+	}
+	return false;
 }

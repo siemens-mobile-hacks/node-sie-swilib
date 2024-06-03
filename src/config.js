@@ -1,4 +1,7 @@
 export default {
+	// Platforms
+	platforms: ["ELKA", "NSG", "X75", "SG"],
+
 	// Supported phones
 	phones: [
 		// NSG ELKA
@@ -12,8 +15,8 @@ export default {
 		'S68v47',
 
 		// SG X75
-		'CX75v13',
 		'CX75v25',
+		'CX75v13',
 		'M75v25',
 		'CF75v23',
 		'C75v24',
@@ -26,28 +29,46 @@ export default {
 		'S65v58',
 	],
 
-	// ELFLoader builtin functions
-	builtin: [
-		0x171, // SUBPROC
-		0x172, // REDRAW
-		0x19C, // SEQKILLER
-		0x1B8, // EXT_TOP
-		0x1B9, // PNG_TOP
-		0x1BA, // LIB_TOP
-		0x1E9, // CreateIMGHDRFromPngFile
-		0x2EE, // elfclose
-		0x2EF, // dlopen
-		0x2F0, // dlsym
-		0x2F1, // dlclose
-		0x2F2, // setenv
-		0x2F3, // unsetenv
-		0x2F4, // getenv
-		0x2F5, // clearenv
-		0x2F6, // getBaseEnviron
-		0x2F7, // dlerror
-		0x2F8, // dlclean_cache
-		0x2F9, // SHARED_TOP
+	// Functions wich available only on certain platforms.
+	platformDependentFunctions: {
+		0x036:		["ELKA"],	// SLI_SetState
+	},
+
+	// Not a functions, but points to the fullflash
+	forcePointers: [
+		0x0F1,	// BuildCanvas
+		0x0FF,	// AddrLibrary
+		0x3C5,	// GetPBarProc3
 	],
+
+	// ELFLoader builtin functions
+	builtin: {
+		0x00B: ["X75", "SG"],					// sys_read
+		0x00C: ["X75", "SG"],					// sys_write
+		0x095: ["X75", "SG"],					// UnRegExplorerExt
+		0x12B: ["X75", "SG"],					// AddKeybMsgHook
+		0x12C: ["X75", "SG"],					// AddKeybMsgHook_end
+		0x12D: ["X75", "SG"],					// RemoveKeybMsgHook
+		0x171: ["ELKA", "NSG", "X75", "SG"],	// SUBPROC
+		0x172: ["ELKA", "NSG", "X75", "SG"],	// REDRAW
+		0x19C: ["ELKA", "NSG", "X75", "SG"],	// SEQKILLER
+		0x1B8: ["ELKA", "NSG", "X75", "SG"],	// EXT_TOP
+		0x1B9: ["ELKA", "NSG", "X75", "SG"],	// PNG_TOP
+		0x1BA: ["ELKA", "NSG", "X75", "SG"],	// LIB_TOP
+		0x1E9: ["ELKA", "NSG", "X75", "SG"],	// CreateIMGHDRFromPngFile
+		0x2EE: ["ELKA", "NSG", "X75", "SG"],	// elfclose
+		0x2EF: ["ELKA", "NSG", "X75", "SG"],	// dlopen
+		0x2F0: ["ELKA", "NSG", "X75", "SG"],	// dlsym
+		0x2F1: ["ELKA", "NSG", "X75", "SG"],	// dlclose
+		0x2F2: ["ELKA", "NSG", "X75", "SG"],	// setenv
+		0x2F3: ["ELKA", "NSG", "X75", "SG"],	// unsetenv
+		0x2F4: ["ELKA", "NSG", "X75", "SG"],	// getenv
+		0x2F5: ["ELKA", "NSG", "X75", "SG"],	// clearenv
+		0x2F6: ["ELKA", "NSG", "X75", "SG"],	// getBaseEnviron
+		0x2F7: ["ELKA", "NSG", "X75", "SG"],	// dlerror
+		0x2F8: ["ELKA", "NSG", "X75", "SG"],	// dlclean_cache
+		0x2F9: ["ELKA", "NSG", "X75", "SG"],	// SHARED_TOP
+	},
 
 	// swilib.vkp patches
 	patches: {
