@@ -180,6 +180,7 @@ export default {
 		0x235, // GetLunarYearID
 		0x236, // GetLunarAnimal
 		0x0C7, // CallLibFunByNumber
+		0x09E, // GetMissedEventCount
 	],
 
 	// Legacy function aliases
