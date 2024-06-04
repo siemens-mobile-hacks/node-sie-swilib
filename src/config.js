@@ -39,6 +39,8 @@ export default {
 		0x0F1,	// BuildCanvas
 		0x0FF,	// AddrLibrary
 		0x3C5,	// GetPBarProc3
+		0x0F8,	// Additional_PIT_address
+		0x0FC,	// PictureRelocationTableAddr
 	],
 
 	// ELFLoader builtin functions

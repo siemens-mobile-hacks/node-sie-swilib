@@ -382,6 +382,7 @@ function parseSwilibFuncName(comm) {
 	.replace(/\/\/.*?$/i, '')
 	.replace(/(;|\*NEW\*|\?\?\?)/gi, '')
 	.replace(/Run ScreenShooter on function /g, '')
+	.replace(/\(API\)/, '') // thanks dimonp25
 	.replace(/С/gi, 'C')
 	.trim();
 
