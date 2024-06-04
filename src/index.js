@@ -378,13 +378,13 @@ export function getSwiTypeName(type) {
 
 function parseSwilibFuncName(comm) {
 	comm = comm
-	.replace(/^\s*0x[a-f0-9]+/i, '')
-	.replace(/\/\/.*?$/i, '')
-	.replace(/(;|\*NEW\*|\?\?\?)/gi, '')
-	.replace(/Run ScreenShooter on function /g, '')
-	.replace(/\((API|MP|Disp)\)/, '') // thanks dimonp25
-	.replace(/С/gi, 'C')
-	.trim();
+		.replace(/^\s*0x[a-f0-9]+/i, '')
+		.replace(/\/\/.*?$/i, '') // comments in comments
+		.replace(/(;|\*NEW\*|\?\?\?)/gi, '')
+		.replace(/Run ScreenShooter on function /g, '')
+		.replace(/\((API|MP|Disp)\)/, '') // thanks dimonp25
+		.replace(/С/gi, 'C') // cyrillic C
+		.trim();
 
 	let m;
 	if ((m = comm.match(/^-?([a-f0-9]+)(?::?\s+|:)(?:([\w\d_ *-]*\s*[*\s]+))?([\w\d_]+)\s*\(/i))) {

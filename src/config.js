@@ -304,6 +304,7 @@ export default {
 		0x29A:	/* AACC_AudioTransferReq */					["SwitchAudioToBTHeadset"],
 		0x29B:	/* Audio_GetObjectHandle */					["GetTypeOfBTHeadset", "GetTypeOfHeadset"],
 		0x2C4:	/* GetProfileVolumeSetting */				["GetPrfileVolumeSetting"],
+		0x2D2:	/* StartNativeBrowserCore */					["StartBrowser"],
 		0x2DB:	/* MediaSendCSM_Open */						["SendMedia"],
 		0x350:	/* NU_Restore_Interrupts_2 */				["NU_Restore_Interrupts"],
 		0x381:	/* CopyTextToClipboard */					["CopyWsToClipboard"],
