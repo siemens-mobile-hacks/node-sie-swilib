@@ -1,3 +1,4 @@
+// Swilib quirks
 export default {
 	// Platforms
 	platforms: ["ELKA", "NSG", "X75", "SG"],
@@ -45,6 +46,12 @@ export default {
 
 	// ELFLoader builtin functions
 	builtin: {
+		0x1A2: ["X75", "SG"],					// ActivateDialUpProfile
+		0x1A3: ["X75", "SG"],					// GetCurrentGPRSProfile
+		0x1A4: ["X75", "SG"],					// GetDisconnectTime
+		0x1A5: ["X75", "SG"],					// RegisterCepIdForCurProfile
+		0x23C: ["X75", "SG"],					// SetCurrentGPRSProfile
+		0x237: ["ELKA"],						// RamIconBar
 		0x00B: ["X75", "SG"],					// sys_read
 		0x00C: ["X75", "SG"],					// sys_write
 		0x095: ["X75", "SG"],					// UnRegExplorerExt
@@ -70,6 +77,13 @@ export default {
 		0x2F7: ["ELKA", "NSG", "X75", "SG"],	// dlerror
 		0x2F8: ["ELKA", "NSG", "X75", "SG"],	// dlclean_cache
 		0x2F9: ["ELKA", "NSG", "X75", "SG"],	// SHARED_TOP
+
+		// China
+		0x242: [],	// gb2ws
+		0x243: [],	// ws2gb
+		0x234: [],	// GetLunarDate
+		0x235: [],	// GetLunarYearID
+		0x236: [],	// GetLunarAnimal
 	},
 
 	// swilib.vkp patches
@@ -304,7 +318,7 @@ export default {
 		0x29A:	/* AACC_AudioTransferReq */					["SwitchAudioToBTHeadset"],
 		0x29B:	/* Audio_GetObjectHandle */					["GetTypeOfBTHeadset", "GetTypeOfHeadset"],
 		0x2C4:	/* GetProfileVolumeSetting */				["GetPrfileVolumeSetting"],
-		0x2D2:	/* StartNativeBrowserCore */					["StartBrowser"],
+		0x2D2:	/* StartNativeBrowserCore */				["StartBrowser"],
 		0x2DB:	/* MediaSendCSM_Open */						["SendMedia"],
 		0x350:	/* NU_Restore_Interrupts_2 */				["NU_Restore_Interrupts"],
 		0x381:	/* CopyTextToClipboard */					["CopyWsToClipboard"],
