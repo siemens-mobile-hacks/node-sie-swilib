@@ -337,6 +337,19 @@ export function compareSwilibFunc(swiNumber, oldName, newName) {
 	return false;
 }
 
+export function getSwiBlib(swilib) {
+	let blib = Buffer.alloc(16 * 1024);
+	for (let id = 0; id < 0x1000; id++) {
+		let offset = id * 4;
+		if (swilib.entries[id]?.value != null) {
+			blib.writeUInt32LE(swilib.entries[id].value, offset);
+		} else {
+			blib.writeUInt32LE(0xFFFFFFFF, offset);
+		}
+	}
+	return blib;
+}
+
 function detectSdkEntryType(entry) {
 	if (swilibConfig.forcePointers.includes(entry.id))
 		return SwiType.POINTER;
