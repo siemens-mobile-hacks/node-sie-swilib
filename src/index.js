@@ -310,7 +310,7 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 			}
 		}
 
-		if (!errors[id] && func.type != sdklib[id].type && sdklib[id].type != SwiType.EMPTY) {
+		if (!errors[id] && func.type != sdklib[id].type && func.type != SwiType.EMPTY) {
 			errors[id] = `Type mismatch: swilib entry is ${getSwiTypeName(func.type)}, but expected ${getSwiTypeName(sdklib[id].type)} (SDK)`;
 		}
 
