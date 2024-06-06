@@ -328,6 +328,45 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 	return { errors, missing, stat };
 }
 
+export function serializeSwilib(phone, sdklib, swilib) {
+	let analysis = analyzeSwilib(phone, sdklib, swilib);
+	let vkp = [
+		`; ${phone}`,
+		`${sprintf("+%08X", swilib.offset)}`,
+		`#pragma enable old_equal_ff`,
+	];
+	for (let id = 0; id < sdklib.length; id++) {
+		let func = swilib.entries[id];
+		if ((id % 16) == 0)
+			vkp.push('');
+
+		let name = (sdklib[id]?.name || '').replace(/\s+/gs, ' ').trim();
+
+		if (analysis.errors[id]) {
+			vkp.push('');
+			vkp.push(`; [ERROR] ${analysis.errors[id]}`);
+			if (func?.value != null) {
+				vkp.push(sprintf(";%03X: 0x%08X   ; %03X: %s", id * 4, func.value, id, name));
+			} else {
+				vkp.push(sprintf(";%03X:              ; %03X: %s", id * 4, id, name));
+			}
+			vkp.push('');
+		} else if (sdklib[id]) {
+			if (func?.value != null) {
+				vkp.push(sprintf("%04X: 0x%08X   ; %03X: %s", id * 4, func.value, id, name));
+			} else {
+				vkp.push(sprintf(";%03X:              ; %03X: %s", id * 4, id, name));
+			}
+		} else {
+			vkp.push(sprintf(";%03X:              ; %03X:", id * 4, id));
+		}
+	}
+	vkp.push('');
+	vkp.push(`#pragma enable old_equal_ff`);
+	vkp.push(`+0`);
+	return vkp.join('\r\n');
+}
+
 export function compareSwilibFunc(swiNumber, oldName, newName) {
 	if (newName == oldName)
 		return true;

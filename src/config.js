@@ -55,6 +55,7 @@ export default {
 		0x3C5,	// GetPBarProc3
 		0x0F8,	// Additional_PIT_address
 		0x0FC,	// PictureRelocationTableAddr
+		0x394,	// RAND_get_rand_method
 	],
 
 	// ELFLoader builtin functions
