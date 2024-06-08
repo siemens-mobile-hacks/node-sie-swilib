@@ -2,6 +2,7 @@ import path from 'path';
 import child_process from 'child_process';
 import { vkpRawParser, VkpParseError, vkpNormalize } from '@sie-js/vkp';
 import swilibConfig from './config.js';
+import { sprintf } from 'sprintf-js';
 
 export { swilibConfig };
 
@@ -150,7 +151,7 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 }
 
 export function serializeSwilib(phone, sdklib, swilib) {
-	let analysis = analyzeSwilib(phone, sdklib, swilib);
+	let analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
 	let vkp = [
 		`; ${phone}`,
 		`${sprintf("+%08X", swilib.offset)}`,
