@@ -30,63 +30,6 @@ export default {
 		'S65v58',
 	],
 
-	// Functions wich available only on certain platforms.
-	platformDependentFunctions: {
-		0x036:		["ELKA"],		// SLI_SetState
-		0x1A2:		["X75", "SG"],	// ActivateDialUpProfile
-		0x1A3:		["X75", "SG"],	// GetCurrentGPRSProfile
-		0x1A4:		["X75", "SG"],	// GetDisconnectTime
-		0x1A5:		["X75", "SG"],	// RegisterCepIdForCurProfile
-		0x23C:		["X75", "SG"],	// SetCurrentGPRSProfile
-		0x237:		["ELKA"],		// RamIconBar
-
-		// China
-		0x242:		[],	// gb2ws
-		0x243:		[],	// ws2gb
-		0x234:		[],	// GetLunarDate
-		0x235:		[],	// GetLunarYearID
-		0x236:		[],	// GetLunarAnimal
-	},
-
-	// Not a functions, but points to the fullflash
-	forcePointers: [
-		0x0F1,	// BuildCanvas
-		0x0FF,	// AddrLibrary
-		0x3C5,	// GetPBarProc3
-		0x0F8,	// Additional_PIT_address
-		0x0FC,	// PictureRelocationTableAddr
-		0x394,	// RAND_get_rand_method
-	],
-
-	// ELFLoader builtin functions
-	builtin: {
-		0x00B: ["X75", "SG"],					// sys_read
-		0x00C: ["X75", "SG"],					// sys_write
-		0x095: ["X75", "SG"],					// UnRegExplorerExt
-		0x12B: ["X75", "SG"],					// AddKeybMsgHook
-		0x12C: ["X75", "SG"],					// AddKeybMsgHook_end
-		0x12D: ["X75", "SG"],					// RemoveKeybMsgHook
-		0x171: ["ELKA", "NSG", "X75", "SG"],	// SUBPROC
-		0x172: ["ELKA", "NSG", "X75", "SG"],	// REDRAW
-		0x19C: ["ELKA", "NSG", "X75", "SG"],	// SEQKILLER
-		0x1B8: ["ELKA", "NSG", "X75", "SG"],	// EXT_TOP
-		0x1B9: ["ELKA", "NSG", "X75", "SG"],	// PNG_TOP
-		0x1BA: ["ELKA", "NSG", "X75", "SG"],	// LIB_TOP
-		0x1E9: ["ELKA", "NSG", "X75", "SG"],	// CreateIMGHDRFromPngFile
-		0x2EE: ["ELKA", "NSG", "X75", "SG"],	// elfclose
-		0x2EF: ["ELKA", "NSG", "X75", "SG"],	// dlopen
-		0x2F0: ["ELKA", "NSG", "X75", "SG"],	// dlsym
-		0x2F1: ["ELKA", "NSG", "X75", "SG"],	// dlclose
-		0x2F2: ["ELKA", "NSG", "X75", "SG"],	// setenv
-		0x2F3: ["ELKA", "NSG", "X75", "SG"],	// unsetenv
-		0x2F4: ["ELKA", "NSG", "X75", "SG"],	// getenv
-		0x2F5: ["ELKA", "NSG", "X75", "SG"],	// clearenv
-		0x2F6: ["ELKA", "NSG", "X75", "SG"],	// getBaseEnviron
-		0x2F7: ["ELKA", "NSG", "X75", "SG"],	// dlerror
-		0x2F8: ["ELKA", "NSG", "X75", "SG"],	// dlclean_cache
-		0x2F9: ["ELKA", "NSG", "X75", "SG"],	// SHARED_TOP
-	},
-
 	// swilib.vkp patches
 	patches: {
 		"S65v58": 7545,
@@ -136,52 +79,6 @@ export default {
 		[0x14B, 0x077], // DrwObj_SetColor
 		[0x1B4, 0x09F], // DrawRectangle
 		[0x1AB, 0x1D6, 0x1AD], // png_set_palette_to_rgb
-	],
-
-	// Functions from patches
-	fromPatches: [
-		0x0C1, // RunDispatcher
-		0x0C2, // GetAllPatchesByInject
-		0x0C4, // GetBuffer
-		0x0BE, // RunScaner
-		0x0E4, // FreeRAM
-		0x011, // OpenReadCloseFile
-		0x007, // GetLP
-		0x1F9, // SendMP_cmd
-		0x0AD, // StrAnsi2Uni
-		0x0AE, // StrUni2Ansi
-		0x0B0, // DrawPicWithCanvas
-		0x0B1, // DrawColorPicWithCanvas
-		0x0AC, // DrawText
-		0x0C3, // ProcessFiles
-		0x056, // PlayVibra
-		0x098, // PlaySoundVibra
-		0x097, // CreatePath
-		0x0B3, // Seconds2iTime
-		0x1F7, // GetFileSize
-		0x088, // GetAccessoryType
-		0x200, // ScreenShoot
-		0x0BF, // SpellTime
-		0x1BB, // DATA_N_SFB
-		0x10A, // GetConfig
-		0x10E, // Vibration
-		0x10B, // GetMinAdrScan
-		0x10C, // GetMaxAdrScan
-		0x0FB, // ShortcutsTableAddr
-		0x0FC, // PictureRelocationTableAddr
-		0x0FD, // PictureRelocationBaseAddr
-		0x0FE, // NextPictureMagicValue
-		0x0F8, // Additional_PIT_address
-		0x0F9, // Additional_PIT_start
-		0x0FA, // Additional_PIT_end
-		0x0C0, // MiniGPS
-		0x1EE, // ProgressCalculate
-		0x0B2, // GetBuildCanvas
-		0x234, // GetLunarDate
-		0x235, // GetLunarYearID
-		0x236, // GetLunarAnimal
-		0x0C7, // CallLibFunByNumber
-		0x09E, // GetMissedEventCount
 	],
 
 	// Legacy function aliases

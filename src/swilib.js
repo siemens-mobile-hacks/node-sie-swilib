@@ -5,6 +5,13 @@ import swilibConfig from './config.js';
 
 export { swilibConfig };
 
+export const SwiValueType = {
+	UNDEFINED:			0,
+	POINTER_TO_RAM:		1,
+	POINTER_TO_FLASH:	2,
+	VALUE:				3,
+};
+
 export const SwiType = {
 	EMPTY:		0,
 	FUNCTION:	1,
@@ -49,7 +56,7 @@ export function parseSwilibPatch(code) {
 
 			let id = data.address / 4;
 			entries[id] = { id, value, symbol };
-			entries[id].type = detectSwilibEntryType(entries[id]);
+			entries[id].type = getSwilibValueType(entries[id]);
 		},
 		onError(e) {
 			throw new Error(`${e.message}\n${e.codeFrame(code)}`);
@@ -67,6 +74,9 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 	let goodCnt = 0;
 	let totalCnt = 0;
 	let unusedCnt = 0;
+
+	if (!swilibConfig.platforms.includes(platform))
+		throw new Error(`Invalid platform: ${platform}`);
 
 	for (let id = 0; id < maxFunctionId; id++) {
 		let func = swilib.entries[id];
@@ -91,17 +101,17 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 		}
 
 		if (sdklib[id] && !func) {
-			if (!(id in swilibConfig.builtin))
+			if (!sdklib[id].builtin)
 				missing.push(id);
 			continue;
 		}
 
-		if (swilibConfig.builtin[id]?.includes(platform) && func) {
-			errors[id] = `Reserved by ELFLoader (${sdklib[id].symbol}).`;
+		if (sdklib[id]?.builtin?.includes(platform) && func) {
+			errors[id] = `Invalid function: ${func.symbol} (Reserved by ELFLoader)`;
 			continue;
 		}
 
-		if (swilibConfig.platformDependentFunctions[id]?.includes(platform) && func) {
+		if (sdklib[id]?.platforms && !sdklib[id].platforms.includes(platform) && func) {
 			errors[id] = `Functions is not available on this platform.`;
 			continue;
 		}
@@ -119,8 +129,10 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 			}
 		}
 
-		if (!errors[id] && func.type != sdklib[id].type && func.type != SwiType.EMPTY) {
-			errors[id] = `Type mismatch: swilib entry is ${getSwiTypeName(func.type)}, but expected ${getSwiTypeName(sdklib[id].type)} (SDK)`;
+		if (!errors[id] && func.type != SwiValueType.UNDEFINED) {
+			let typeError = checkTypeConsistency(sdklib[id], func);
+			if (typeError)
+				errors[id] = typeError;
 		}
 
 		if (!errors[id])
@@ -189,8 +201,8 @@ export function getPlatformByPhone(phone) {
 }
 
 export function getPlatformSwilibFromSDK(sdk, platform) {
-	const SWI_FUNC_RE = /__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w\d_]+)\);/sig;
-	const CODE_LINE_RE = /^# (\d+) "([^"]+)"$/img;
+	const SWI_FUNC_RE = /\/\*\*(.*?)\*\/|__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w\d_]+)\);/sig;
+	const CODE_LINE_RE = /^# (\d+) "([^"]+)"/img;
 
 	sdk = path.resolve(sdk);
 
@@ -203,6 +215,7 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 
 	let args = [
 		"-E",
+		"-CC",
 		"-nostdinc",
 		`-I${sdk}/dietlibc/include`,
 		`-I${sdk}/swilib/include`,
@@ -218,26 +231,55 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 	if (status != 0)
 		throw new Error(`GCC ERROR: ${stderr.toString()}`);
 
+	stdout = stdout.toString();
+
 	let m;
 	let sourceFiles = [];
 	while ((m = CODE_LINE_RE.exec(stdout))) {
-		sourceFiles.unshift({
-			index: CODE_LINE_RE.lastIndex,
+		sourceFiles.push({
+			index: CODE_LINE_RE.lastIndex - m[0].length,
 			file: path.resolve(m[2])
 		});
 	}
 
 	let getFileByIndex = (index) => {
+		let found;
 		for (let entry of sourceFiles) {
-			if (index >= entry.index)
-				return entry.file;
+			if (index >= entry.index) {
+				found = entry;
+			}
 		}
-		return null;
+		return found?.file;
 	};
 
 	let table = [];
+	let prevDoxygen;
 	while ((m = SWI_FUNC_RE.exec(stdout))) {
-		let swiNumber = parseInt(m[2], 16);
+		let [fullMatchStr, doxygen, name, swiNumberStr, symbol] = m;
+
+		let offset = SWI_FUNC_RE.lastIndex - fullMatchStr.length;
+		let sourceFile = getFileByIndex(offset).replace(`${sdk}/swilib/include/`, '');
+
+		if (doxygen) {
+			prevDoxygen = {
+				value:	doxygen,
+				offset:	SWI_FUNC_RE.lastIndex,
+				file:	sourceFile
+			};
+			continue;
+		}
+
+		if (prevDoxygen) {
+			if (prevDoxygen.file != sourceFile) {
+				prevDoxygen = null;
+			} else if (stdout.substring(prevDoxygen.offset, offset).match(/\S/)) {
+				prevDoxygen = null;
+			} else if (prevDoxygen.value.indexOf('@{') >= 0 || prevDoxygen.value.indexOf('@}') >= 0) {
+				prevDoxygen = null;
+			}
+		}
+
+		let swiNumber = parseInt(swiNumberStr, 16);
 		let isPointer = false;
 
 		if (swiNumber >= 0x8000) {
@@ -250,31 +292,57 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 		if (!table[swiNumber]) {
 			table[swiNumber] = {
 				id:			swiNumber,
-				name:		m[1],
-				symbol:		m[3],
+				name,
+				symbol,
+				type:		SwiType.FUNCTION,
 				functions:	[],
 				pointers:	[],
 				aliases:	[],
-				files:		[]
+				files:		[],
+				platforms:	null,
+				builtin:	null,
+				pointerTo:	null,
 			};
 		}
 
-		let sourceFile = getFileByIndex(SWI_FUNC_RE.lastIndex).replace(`${sdk}/swilib/include/`, '');
+		if (prevDoxygen) {
+			// Platform-dependent function
+			if ((m = prevDoxygen.value.match(/@platforms\s+(.*?)$/im))) {
+				table[swiNumber].platforms = table[swiNumber].platforms || [];
+				for (let funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+					if (!swilibConfig.platforms.includes(funcPlatform))
+						throw new Error(`Invalid platform: ${funcPlatform}`);
+					if (!table[swiNumber].platforms.includes(funcPlatform))
+						table[swiNumber].platforms.push(funcPlatform);
+				}
+			}
+			// Builtin function
+			else if ((m = prevDoxygen.value.match(/@builtin\s+(.*?)$/im))) {
+				table[swiNumber].builtin = table[swiNumber].builtin || [];
+				for (let funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+					if (!swilibConfig.platforms.includes(funcPlatform))
+						throw new Error(`Invalid platform: ${funcPlatform}`);
+					if (!table[swiNumber].builtin.includes(funcPlatform))
+						table[swiNumber].builtin.push(funcPlatform);
+				}
+			}
+			// Builtin function
+			else if ((m = prevDoxygen.value.match(/@pointer-type\s+(.*?)$/im))) {
+				let pointerMemoryType = m[1].trim();
+				if (!["RAM", "FLASH"].includes(pointerMemoryType))
+					throw new Error(`Invalid pointer type: ${pointerMemoryType}`);
+				table[swiNumber].pointerTo = pointerMemoryType;
+			}
+		}
 
 		if (!table[swiNumber].files.includes(sourceFile))
 			table[swiNumber].files.push(sourceFile);
-		table[swiNumber].aliases.push(m[3]);
+		table[swiNumber].aliases.push(symbol);
 
 		if (isPointer) {
-			table[swiNumber].pointers.push({
-				symbol:		m[3],
-				name:		m[1],
-			});
+			table[swiNumber].pointers.push({ name, symbol });
 		} else {
-			table[swiNumber].functions.push({
-				symbol:		m[3],
-				name:		m[1],
-			});
+			table[swiNumber].functions.push({ name, symbol });
 
 			if (table[swiNumber].functions.length == 1) {
 				table[swiNumber].symbol = table[swiNumber].functions[0].symbol;
@@ -282,8 +350,19 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 			}
 		}
 
+		prevDoxygen = null;
+	}
+
+	for (let id = 0; id < table.length; id++) {
+		let func = table[id];
+		if (!func)
+			continue;
+
 		// Analyze type
-		table[swiNumber].type = detectSdkEntryType(table[swiNumber]);
+		func.type = detectSdkEntryType(table[id]);
+
+		if (func.type == SwiType.POINTER && !func.pointerTo)
+			func.pointerTo = 'RAM';
 	}
 
 	return table;
@@ -314,11 +393,32 @@ export function getSwiBlib(swilib) {
 export function getSwiTypeName(type) {
 	switch (type) {
 		case SwiType.EMPTY:		return "EMPTY";
-		case SwiType.FUNCTION:	return "FIRMWARE_FUNCTION";
-		case SwiType.POINTER:	return "RAM_POINTER";
+		case SwiType.FUNCTION:	return "FUNCTION";
+		case SwiType.POINTER:	return "POINTER";
 		case SwiType.VALUE:		return "NUMERIC_VALUE";
 	}
 	return "???";
+}
+
+export function getSwiValueTypeName(type) {
+	switch (type) {
+		case SwiValueType.POINTER_TO_FLASH:	return "POINTER_TO_FLASH";
+		case SwiValueType.POINTER_TO_RAM:	return "POINTER_TO_RAM";
+		case SwiValueType.VALUE:			return "NUMERIC_VALUE";
+		case SwiValueType.UNDEFINED:		return "UNDEFINED";
+	}
+	return "???";
+}
+
+function checkTypeConsistency(sdkEntry, swilibEntry) {
+	let typesMap = {
+		[SwiType.FUNCTION]:		[SwiValueType.POINTER_TO_FLASH],
+		[SwiType.POINTER]:		[SwiValueType.POINTER_TO_FLASH, SwiValueType.POINTER_TO_RAM],
+		[SwiType.VALUE]:		[SwiValueType.VALUE],
+	};
+	if (!typesMap[sdkEntry.type].includes(swilibEntry.type))
+		return `Type mismatch: ${getSwiValueTypeName(swilibEntry.type)} (SWILIB) is not allowed for ${getSwiTypeName(sdkEntry.type)} (SDK).`;
+	return null;
 }
 
 function parseSwilibFuncName(comm) {
@@ -344,8 +444,6 @@ function parseSwilibFuncName(comm) {
 }
 
 function detectSdkEntryType(entry) {
-	if (swilibConfig.forcePointers.includes(entry.id))
-		return SwiType.POINTER;
 	if (!entry.functions.length) {
 		if (entry.name.match(/^[\w\d\s]+\s([\w\d]+)\s*\(\s*(void)?\s*\)/i)) {
 			return SwiType.VALUE;
@@ -356,20 +454,18 @@ function detectSdkEntryType(entry) {
 	return SwiType.FUNCTION;
 }
 
-function detectSwilibEntryType(entry) {
+function getSwilibValueType(entry) {
 	if (entry != null && entry.value != 0xFFFFFFFF) {
 		let addr = BigInt(entry.value) & 0xFF000000n;
 		if (addr >= 0xA0000000n && addr < 0xA8000000n) {
-			if (swilibConfig.forcePointers.includes(entry.id))
-				return SwiType.POINTER;
-			return SwiType.FUNCTION;
+			return SwiValueType.POINTER_TO_FLASH;
 		} else if (addr >= 0xA8000000n && addr < 0xB0000000n) {
-			return SwiType.POINTER;
+			return SwiValueType.POINTER_TO_RAM;
 		} else {
-			return SwiType.VALUE;
+			return SwiValueType.VALUE;
 		}
 	}
-	return SwiType.EMPTY;
+	return SwiValueType.UNDEFINED;
 }
 
 function formatId(id) {
