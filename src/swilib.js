@@ -22,10 +22,15 @@ export const SwiType = {
 
 const functionPairs = getFunctionPairs();
 
-export function parseSwilibPatch(code) {
+export function parseSwilibPatch(code, options = {}) {
 	let offset = null;
 	let entries = [];
 	let end = false;
+
+	options = {
+		comments: false,
+		...options,
+	};
 
 	if (Buffer.isBuffer(code))
 		code = vkpNormalize(code);
@@ -58,6 +63,10 @@ export function parseSwilibPatch(code) {
 			let id = data.address / 4;
 			entries[id] = { id, value, symbol };
 			entries[id].type = getSwilibValueType(entries[id]);
+
+			if (options.comments) {
+				entries[id].comment = data.comment;
+			}
 		},
 		onError(e) {
 			throw new Error(`${e.message}\n${e.codeFrame(code)}`);
@@ -168,19 +177,27 @@ export function serializeSwilib(phone, sdklib, swilib) {
 			vkp.push('');
 			vkp.push(`; [ERROR] ${analysis.errors[id]}`);
 			if (func?.value != null) {
-				vkp.push(sprintf(";%03X: 0x%08X   ; %03X: %s", id * 4, func.value, id, name));
+				vkp.push(sprintf(";%03X: 0x%08X   ; %3X: %s", id * 4, func.value, id, name));
 			} else {
-				vkp.push(sprintf(";%03X:              ; %03X: %s", id * 4, id, name));
+				vkp.push(sprintf(";%03X:              ; %3X: %s", id * 4, id, name));
 			}
 			vkp.push('');
 		} else if (sdklib[id]) {
-			if (func?.value != null) {
-				vkp.push(sprintf("%04X: 0x%08X   ; %03X: %s", id * 4, func.value, id, name));
+			if (func?.comment != null) {
+				if (func?.value != null) {
+					vkp.push(sprintf("%04X: 0x%08X   ;%s", id * 4, func.value, func.comment));
+				} else {
+					vkp.push(sprintf(";%03X:              ;%s", id * 4, id, func.comment));
+				}
 			} else {
-				vkp.push(sprintf(";%03X:              ; %03X: %s", id * 4, id, name));
+				if (func?.value != null) {
+					vkp.push(sprintf("%04X: 0x%08X   ; %3X: %s", id * 4, func.value, id, name));
+				} else {
+					vkp.push(sprintf(";%03X:              ; %3X: %s", id * 4, id, name));
+				}
 			}
 		} else {
-			vkp.push(sprintf(";%03X:              ; %03X:", id * 4, id));
+			vkp.push(sprintf(";%03X:              ; %3X:", id * 4, id));
 		}
 	}
 	vkp.push('');
