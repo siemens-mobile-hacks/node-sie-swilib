@@ -309,17 +309,18 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 
 		if (!table[swiNumber]) {
 			table[swiNumber] = {
-				id:			swiNumber,
+				id:				swiNumber,
 				name,
 				symbol,
-				type:		SwiType.FUNCTION,
-				functions:	[],
-				pointers:	[],
-				aliases:	[],
-				files:		[],
-				platforms:	null,
-				builtin:	null,
-				pointerTo:	null,
+				type:			SwiType.FUNCTION,
+				definitions:	[],
+				functions:		[],
+				pointers:		[],
+				aliases:		[],
+				files:			[],
+				platforms:		null,
+				builtin:		null,
+				pointerTo:		null,
 			};
 		}
 
@@ -357,10 +358,12 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 			table[swiNumber].files.push(sourceFile);
 		table[swiNumber].aliases.push(symbol);
 
+		table[swiNumber].definitions.push({ name, symbol, file: sourceFile });
+
 		if (isPointer) {
-			table[swiNumber].pointers.push({ name, symbol });
+			table[swiNumber].pointers.push({ name, symbol, file: sourceFile });
 		} else {
-			table[swiNumber].functions.push({ name, symbol });
+			table[swiNumber].functions.push({ name, symbol, file: sourceFile });
 
 			if (table[swiNumber].functions.length == 1) {
 				table[swiNumber].symbol = table[swiNumber].functions[0].symbol;
