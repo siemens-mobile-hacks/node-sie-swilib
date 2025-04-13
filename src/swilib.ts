@@ -1,6 +1,6 @@
 import path from 'path';
 import child_process from 'node:child_process';
-import { vkpRawParser, VkpParseError, vkpNormalize } from '@sie-js/vkp';
+import { vkpNormalize, VkpParseError, vkpRawParser } from '@sie-js/vkp';
 import { swilibConfig } from './config.js';
 import { sprintf } from 'sprintf-js';
 

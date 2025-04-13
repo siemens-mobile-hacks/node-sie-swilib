@@ -1,5 +1,5 @@
 import child_process from 'node:child_process';
-import { analyzeSwilib, getPlatformByPhone, SwiType } from './swilib.js';
+import { analyzeSwilib, getPlatformByPhone, SdkEntry, Swilib, SwiType } from './swilib.js';
 import { sprintf } from 'sprintf-js';
 
 export function getDataTypesHeader(sdk: string, platform: string): string {
@@ -41,7 +41,7 @@ export function getDataTypesHeader(sdk: string, platform: string): string {
 		.replace(/^\n+$/gm, '\n');
 }
 
-export function getGhidraSymbols(phone: string, sdklib: any[], swilib: any): string {
+export function getGhidraSymbols(phone: string, sdklib: SdkEntry[], swilib: Swilib): string {
 	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
 	const symbols: string[] = [];
 	for (let id = 0; id < sdklib.length; id++) {
