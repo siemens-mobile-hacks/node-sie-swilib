@@ -1,7 +1,7 @@
 import path from 'path';
 import child_process from 'node:child_process';
 import { vkpNormalize, VkpParseError, vkpRawParser } from '@sie-js/vkp';
-import { swilibConfig } from './config.js';
+import { swilibConfig, SwiPlatform } from './config.js';
 import { sprintf } from 'sprintf-js';
 
 export enum SwiValueType {
@@ -48,7 +48,7 @@ export type SdkEntry = {
 	pointers: SdkDefinition[];
 	aliases: string[];
 	files: string[];
-	platforms?: string[];
+	platforms?: SwiPlatform[];
 	builtin?: string[];
 	pointerTo: SdkPointerType;
 };
@@ -141,7 +141,7 @@ export function parseSwilibPatch(code: string | Buffer, options: SwilibParserOpt
 	return { offset: offset ?? 0, entries };
 }
 
-export function analyzeSwilib(platform: string, sdklib: SdkEntry[], swilib: Swilib): SwilibAnalysisResult {
+export function analyzeSwilib(platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): SwilibAnalysisResult {
 	const maxFunctionId = Math.max(sdklib.length, swilib.entries.length);
 	const errors: Record<number, string> = {};
 	const duplicates: Record<number, number> = {};
@@ -274,29 +274,29 @@ export function serializeSwilib(phone: string, sdklib: SdkEntry[], swilib: Swili
 	return vkp.join('\r\n');
 }
 
-export function getPlatformByPhone(phone: string): string {
-	if (swilibConfig.platforms.includes(phone))
-		return phone;
+export function getPlatformByPhone(phone: string): SwiPlatform {
+	if ((swilibConfig.platforms as string[]).includes(phone))
+		return phone as SwiPlatform;
 	const m = phone.match(/^(.*?)(?:v|sw)([\d+_]+)$/i);
 	if (!m)
 		throw new Error(`Invalid phone model: ${phone}`);
 	const model = m[1];
-	if (/^(EL71|E71|CL61|M72|C1F0)$/i.test(model))
+	if (/^(EL71|E71|ELF71|CL61|M72|C1F0)[a-z]?$/i.test(model))
 		return "ELKA";
-	if (/^(C81|S75|SL75|S68)$/i.test(model))
+	if (/^(C81|S75|SL75|S68)[a-z]?$/i.test(model))
 		return "NSG";
-	if (/^([A-Z]+)(75|72)$/i.test(model))
+	if (/^([A-Z]+)(75|72)[a-z]?$/i.test(model))
 		return "X75";
 	return "SG";
 }
 
-export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntry[] {
+export function getPlatformSwilibFromSDK(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 	const SWI_FUNC_RE = /\/\*\*(.*?)\*\/|__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w_]+)\);/sig;
 	const CODE_LINE_RE = /^# (\d+) "([^"]+)"/img;
 
-	sdk = path.resolve(sdk);
+	sdkPath = path.resolve(sdkPath);
 
-	const defines: Record<string, string[]> = {
+	const defines: Record<SwiPlatform, string[]> = {
 		NSG:	["-DNEWSGOLD"],
 		ELKA:	["-DNEWSGOLD -DELKA"],
 		X75:	["-DX75"],
@@ -307,14 +307,14 @@ export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntr
 		"-E",
 		"-CC",
 		"-nostdinc",
-		`-I${sdk}/dietlibc/include`,
-		`-I${sdk}/swilib/include`,
-		`-I${sdk}/include`,
+		`-I${sdkPath}/dietlibc/include`,
+		`-I${sdkPath}/swilib/include`,
+		`-I${sdkPath}/include`,
 		"-DDOXYGEN",
 		"-DSWILIB_PARSE_FUNCTIONS",
 		"-DSWILIB_INCLUDE_ALL",
 		...defines[platform],
-		`${sdk}/swilib/include/swilib.h`,
+		`${sdkPath}/swilib/include/swilib.h`,
 	];
 
 	const { stdout, stderr, status } = child_process.spawnSync('arm-none-eabi-gcc', args);
@@ -348,7 +348,7 @@ export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntr
 		const [fullMatchStr, doxygen, name, swiNumberStr, symbol] = m;
 
 		const offset = SWI_FUNC_RE.lastIndex - fullMatchStr.length;
-		const sourceFile = getFileByIndex(offset)?.replace(`${sdk}/swilib/include/`, '');
+		const sourceFile = getFileByIndex(offset)?.replace(`${sdkPath}/swilib/include/`, '');
 
 		if (!sourceFile)
 			throw new Error(`Cannot find source file for offset ${offset}.`);
@@ -403,7 +403,7 @@ export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntr
 			// Platform-dependent function
 			if ((m = prevDoxygen.value.match(/@platforms\s+(.*?)$/im))) {
 				table[swiNumber].platforms = table[swiNumber].platforms ?? [];
-				for (const funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+				for (const funcPlatform of m[1].trim().split(/\s*,\s*/) as SwiPlatform[]) {
 					if (!swilibConfig.platforms.includes(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
 					if (!table[swiNumber].platforms!.includes(funcPlatform))
@@ -413,7 +413,7 @@ export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntr
 			// Builtin function
 			else if ((m = prevDoxygen.value.match(/@builtin\s+(.*?)$/im))) {
 				table[swiNumber].builtin = table[swiNumber].builtin ?? [];
-				for (const funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+				for (const funcPlatform of m[1].trim().split(/\s*,\s*/) as SwiPlatform[]) {
 					if (!swilibConfig.platforms.includes(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
 					if (!table[swiNumber].builtin!.includes(funcPlatform))

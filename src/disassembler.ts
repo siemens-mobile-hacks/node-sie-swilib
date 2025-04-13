@@ -1,9 +1,10 @@
 import child_process from 'node:child_process';
-import { analyzeSwilib, getPlatformByPhone, SdkEntry, Swilib, SwiType } from './swilib.js';
+import { analyzeSwilib, SdkEntry, Swilib, SwiType } from './swilib.js';
 import { sprintf } from 'sprintf-js';
+import { SwiPlatform } from "./config.js";
 
-export function getDataTypesHeader(sdk: string, platform: string): string {
-	const defines: Record<string, string[]> = {
+export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): string {
+	const defines: Record<SwiPlatform, string[]> = {
 		NSG:  ["-DNEWSGOLD"],
 		ELKA: ["-DNEWSGOLD -DELKA"],
 		X75:  ["-DX75"],
@@ -13,16 +14,16 @@ export function getDataTypesHeader(sdk: string, platform: string): string {
 	const args: string[] = [
 		"-E",
 		"-nostdinc",
-		`-I${sdk}/dietlibc/include`,
-		`-I${sdk}/swilib/include`,
-		`-I${sdk}/include`,
+		`-I${sdkPath}/dietlibc/include`,
+		`-I${sdkPath}/swilib/include`,
+		`-I${sdkPath}/include`,
 		"-D__attribute__(...)=",
 		"-DDOXYGEN",
 		"-DSWILIB_MODERN",
 		"-DSWILIB_PARSE_FUNCTIONS",
 		"-DSWILIB_INCLUDE_ALL",
 		...defines[platform],
-		`${sdk}/swilib/include/swilib.h`,
+		`${sdkPath}/swilib/include/swilib.h`,
 	];
 
 	const result = child_process.spawnSync('arm-none-eabi-gcc', args);
@@ -41,8 +42,8 @@ export function getDataTypesHeader(sdk: string, platform: string): string {
 		.replace(/^\n+$/gm, '\n');
 }
 
-export function getGhidraSymbols(phone: string, sdklib: SdkEntry[], swilib: Swilib): string {
-	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
+export function getGhidraSymbols(platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
+	const analysis = analyzeSwilib(platform, sdklib, swilib);
 	const symbols: string[] = [];
 	for (let id = 0; id < sdklib.length; id++) {
 		const func = swilib.entries[id];
@@ -69,8 +70,8 @@ export function getGhidraSymbols(phone: string, sdklib: SdkEntry[], swilib: Swil
 	return symbols.join("\n");
 }
 
-export function getIdaSymbols(phone: string, sdklib: any[], swilib: any): string {
-	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
+export function getIdaSymbols(platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
+	const analysis = analyzeSwilib(platform, sdklib, swilib);
 	const symbols: string[] = [
 		`#include <idc.idc>`,
 		`static main() {`,

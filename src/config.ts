@@ -1,6 +1,8 @@
+export type SwiPlatform = 'ELKA' | 'NSG' | 'X75' | 'SG';
+
 // Swilib quirks
 export interface SwilibConfig {
-  platforms: string[];
+  platforms: SwiPlatform[];
   phones: string[];
   patches: Record<string, number>;
   pairs: number[][];
@@ -9,7 +11,7 @@ export interface SwilibConfig {
 
 export const swilibConfig: SwilibConfig = {
 	// Platforms
-	platforms: ["ELKA", "NSG", "X75", "SG"],
+	platforms: ['ELKA', 'NSG', 'X75', 'SG'],
 
 	// Supported phones
 	phones: [
