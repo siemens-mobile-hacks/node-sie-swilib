@@ -1,16 +1,16 @@
 import child_process from 'node:child_process';
-import { SwiType, analyzeSwilib, getPlatformByPhone } from './swilib.js';
+import { analyzeSwilib, getPlatformByPhone, SwiType } from './swilib.js';
 import { sprintf } from 'sprintf-js';
 
-export function getDataTypesHeader(sdk, platform) {
-	let defines = {
-		NSG:	["-DNEWSGOLD"],
-		ELKA:	["-DNEWSGOLD -DELKA"],
-		X75:	["-DX75"],
-		SG:		[]
+export function getDataTypesHeader(sdk: string, platform: string): string {
+	const defines: Record<string, string[]> = {
+		NSG:  ["-DNEWSGOLD"],
+		ELKA: ["-DNEWSGOLD -DELKA"],
+		X75:  ["-DX75"],
+		SG:   []
 	};
 
-	let args = [
+	const args: string[] = [
 		"-E",
 		"-nostdinc",
 		`-I${sdk}/dietlibc/include`,
@@ -25,29 +25,27 @@ export function getDataTypesHeader(sdk, platform) {
 		`${sdk}/swilib/include/swilib.h`,
 	];
 
-	let { stdout, stderr, status } = child_process.spawnSync('arm-none-eabi-gcc', args);
-	if (status != 0)
+	const result = child_process.spawnSync('arm-none-eabi-gcc', args);
+	const { stdout, stderr, status } = result;
+
+	if (status !== 0)
 		throw new Error(`GCC ERROR: ${stderr.toString()}`);
 
-	stdout = stdout.toString();
-
-	stdout = stdout
+	return stdout.toString()
 		// Remove all functions
 		.replace(/__swi_begin\s+.*?\s+__swi_end\(.*?\);/sig, '')
 		// Remove all comments
 		.replace(/^#.*?$/gm, '')
 		// Empty lines
 		.replace(/^\s+$/gm, '')
-		.replace(/^[\n]+$/gm, '\n');
-
-	return stdout;
+		.replace(/^\n+$/gm, '\n');
 }
 
-export function getGhidraSymbols(phone, sdklib, swilib) {
-	let analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
-	let symbols = [];
+export function getGhidraSymbols(phone: string, sdklib: any[], swilib: any): string {
+	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
+	const symbols: string[] = [];
 	for (let id = 0; id < sdklib.length; id++) {
-		let func = swilib.entries[id];
+		const func = swilib.entries[id];
 		if (!func || func.value == null)
 			continue;
 		if (analysis.errors[id])
@@ -55,7 +53,7 @@ export function getGhidraSymbols(phone, sdklib, swilib) {
 
 		if (sdklib[id].type == SwiType.FUNCTION) {
 			// Function
-			let signature = sdklib[id].name.replace(/\s+/g, ' ').trim();
+			const signature = sdklib[id].name.replace(/\s+/g, ' ').trim();
 			symbols.push(sprintf("F\t%08X\t%s\t%s", func.value & ~1, sdklib[id].symbol, signature));
 		} else if (sdklib[id].type == SwiType.POINTER) {
 			let type = dereferenceCType(parseReturnType(sdklib[id].name));
@@ -71,14 +69,14 @@ export function getGhidraSymbols(phone, sdklib, swilib) {
 	return symbols.join("\n");
 }
 
-export function getIdaSymbols(phone, sdklib, swilib) {
-	let analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
-	let symbols = [
+export function getIdaSymbols(phone: string, sdklib: any[], swilib: any): string {
+	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
+	const symbols: string[] = [
 		`#include <idc.idc>`,
 		`static main() {`,
 	];
 	for (let id = 0; id < sdklib.length; id++) {
-		let func = swilib.entries[id];
+		const func = swilib.entries[id];
 		if (!func || func.value == null)
 			continue;
 		if (analysis.errors[id])
@@ -93,13 +91,13 @@ export function getIdaSymbols(phone, sdklib, swilib) {
 	return symbols.join("\n");
 }
 
-function dereferenceCType(type) {
+function dereferenceCType(type: string): string {
 	return type.replace(/\*/, '').replace(/\bconst\b/, '').trim();
 }
 
-function parseReturnType(def) {
+function parseReturnType(def: string): string {
 	def = def.replace(/\s+/g, ' ').trim();
-	let m = def.match(/^(.*?\s?[*]?)([\w\d_]+)\((\s*void\s*)?\)$/i);
+	const m = def.match(/^(.*?\s?[*]?)([\w_]+)\((\s*void\s*)?\)$/i);
 	if (!m)
 		throw new Error(`Can't parse C definition: ${def}`);
 	return m[1].trim();

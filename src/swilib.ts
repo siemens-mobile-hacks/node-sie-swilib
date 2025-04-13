@@ -1,33 +1,98 @@
 import path from 'path';
-import child_process from 'child_process';
+import child_process from 'node:child_process';
 import { vkpRawParser, VkpParseError, vkpNormalize } from '@sie-js/vkp';
-import swilibConfig from './config.js';
+import { swilibConfig } from './config.js';
 import { sprintf } from 'sprintf-js';
 
-export { swilibConfig };
+export enum SwiValueType {
+	UNDEFINED,
+	POINTER_TO_RAM,
+	POINTER_TO_FLASH,
+	VALUE,
+}
 
-export const SwiValueType = {
-	UNDEFINED:			0,
-	POINTER_TO_RAM:		1,
-	POINTER_TO_FLASH:	2,
-	VALUE:				3,
+export enum SwiType {
+	EMPTY,
+	FUNCTION,
+	POINTER,
+	VALUE,
+}
+
+export type SwiEntry = {
+	id: number;
+	value: number;
+	symbol: string;
+	type: SwiValueType;
+	comment?: string;
 };
 
-export const SwiType = {
-	EMPTY:		0,
-	FUNCTION:	1,
-	POINTER:	2,
-	VALUE:		3,
+export type SdkDefinition = {
+	name: string
+	symbol: string;
+	file: string;
+};
+
+export enum SdkPointerType {
+	UNKNOWN,
+	RAM,
+	FLASH
+}
+
+export type SdkEntry = {
+	id: number;
+	name: string;
+	symbol: string;
+	type: SwiType;
+	definitions: SdkDefinition[];
+	functions: SdkDefinition[];
+	pointers: SdkDefinition[];
+	aliases: string[];
+	files: string[];
+	platforms?: string[];
+	builtin?: string[];
+	pointerTo: SdkPointerType;
+};
+
+export type SwilibAnalysisResult = {
+	errors: Record<number, string>;
+	missing: number[];
+	stat: {
+		bad: number;
+		good: number;
+		missing: number;
+		total: number;
+		unused: number;
+	};
+};
+
+export type Swilib = {
+	offset: number;
+	entries: SwiEntry[];
+};
+
+type SourceFile = {
+	index: number;
+	file: string;
+};
+
+type DoxygenEntry = {
+	value:	string;
+	offset:	number;
+	file: string;
 };
 
 const functionPairs = getFunctionPairs();
 
-export function parseSwilibPatch(code, options = {}) {
-	let offset = null;
-	let entries = [];
+export type SwilibParserOptions = {
+	comments?: boolean;
+};
+
+export function parseSwilibPatch(code: string | Buffer, options: SwilibParserOptions = {}): Swilib {
+	let offset: number | undefined;
+	const entries: SwiEntry[] = [];
 	let end = false;
 
-	options = {
+	const validOptions = {
 		comments: false,
 		...options,
 	};
@@ -55,16 +120,16 @@ export function parseSwilibPatch(code, options = {}) {
 			if ((data.address % 4) != 0)
 				throw new VkpParseError(`Address is not aligned to 4`, loc);
 
-			let value = data.new.buffer.readUInt32LE(0);
-			let symbol = parseSwilibFuncName(data.comment);
+			const value = data.new.buffer.readUInt32LE(0);
+			const symbol = parseSwilibFuncName(data.comment);
 			if (!symbol)
 				throw new VkpParseError(`Invalid comment: ${data.comment}`, loc);
 
-			let id = data.address / 4;
-			entries[id] = { id, value, symbol };
+			const id = data.address / 4;
+			entries[id] = { id, value, symbol, type: SwiValueType.UNDEFINED };
 			entries[id].type = getSwilibValueType(entries[id]);
 
-			if (options.comments) {
+			if (validOptions.comments) {
 				entries[id].comment = data.comment;
 			}
 		},
@@ -73,14 +138,14 @@ export function parseSwilibPatch(code, options = {}) {
 		}
 	});
 
-	return { offset, entries };
+	return { offset: offset ?? 0, entries };
 }
 
-export function analyzeSwilib(platform, sdklib, swilib) {
-	let maxFunctionId = Math.max(sdklib.length, swilib.entries.length);
-	let errors = {};
-	let duplicates = {};
-	let missing = [];
+export function analyzeSwilib(platform: string, sdklib: SdkEntry[], swilib: Swilib): SwilibAnalysisResult {
+	const maxFunctionId = Math.max(sdklib.length, swilib.entries.length);
+	const errors: Record<number, string> = {};
+	const duplicates: Record<number, number> = {};
+	const missing: number[] = [];
 	let goodCnt = 0;
 	let totalCnt = 0;
 	let unusedCnt = 0;
@@ -89,7 +154,7 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 		throw new Error(`Invalid platform: ${platform}`);
 
 	for (let id = 0; id < maxFunctionId; id++) {
-		let func = swilib.entries[id];
+		const func = swilib.entries[id];
 		if (!sdklib[id] && !func) {
 			unusedCnt++;
 			continue;
@@ -103,9 +168,9 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 		}
 
 		if (functionPairs[id]) {
-			let masterFunc = swilib.entries[functionPairs[id][0]];
+			const masterFunc = swilib.entries[functionPairs[id][0]];
 			if (masterFunc && (!func || masterFunc.value != func.value)) {
-				let expectedValue = masterFunc.value.toString(16).padStart(8, '0').toUpperCase();
+				const expectedValue = masterFunc.value.toString(16).padStart(8, '0').toUpperCase();
 				errors[id] = `Address must be equal with #${formatId(masterFunc.id)} ${masterFunc.symbol} (0x${expectedValue}).`;
 			}
 		}
@@ -121,7 +186,7 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 			continue;
 		}
 
-		if (sdklib[id]?.platforms && !sdklib[id].platforms.includes(platform) && func) {
+		if (sdklib[id]?.platforms && !sdklib[id].platforms!.includes(platform) && func) {
 			errors[id] = `Functions is not available on this platform.`;
 			continue;
 		}
@@ -133,14 +198,14 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 
 		if ((BigInt(func.value) & 0xF0000000n) == 0xA0000000n) {
 			if (duplicates[func.value]) {
-				let dupId = duplicates[func.value];
+				const dupId = duplicates[func.value];
 				if (!functionPairs[func.id] || !functionPairs[func.id].includes(dupId))
 					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib[dupId].symbol}.`;
 			}
 		}
 
 		if (!errors[id] && func.type != SwiValueType.UNDEFINED) {
-			let typeError = checkTypeConsistency(sdklib[id], func);
+			const typeError = checkTypeConsistency(sdklib[id], func);
 			if (typeError)
 				errors[id] = typeError;
 		}
@@ -149,29 +214,32 @@ export function analyzeSwilib(platform, sdklib, swilib) {
 			goodCnt++;
 	}
 
-	let stat = {
-		bad: Object.keys(errors).length,
-		good: goodCnt,
-		missing: missing.length,
-		total: totalCnt,
-		unused: unusedCnt
+	return {
+		errors,
+		missing,
+		stat: {
+			bad: Object.keys(errors).length,
+			good: goodCnt,
+			missing: missing.length,
+			total: totalCnt,
+			unused: unusedCnt
+		}
 	};
-	return { errors, missing, stat };
 }
 
-export function serializeSwilib(phone, sdklib, swilib) {
-	let analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
-	let vkp = [
+export function serializeSwilib(phone: string, sdklib: SdkEntry[], swilib: Swilib): string {
+	const analysis = analyzeSwilib(getPlatformByPhone(phone), sdklib, swilib);
+	const vkp = [
 		`; ${phone}`,
 		`${sprintf("+%08X", swilib.offset)}`,
 		`#pragma enable old_equal_ff`,
 	];
 	for (let id = 0; id < sdklib.length; id++) {
-		let func = swilib.entries[id];
+		const func = swilib.entries[id];
 		if ((id % 16) == 0)
 			vkp.push('');
 
-		let name = (sdklib[id]?.name || '').replace(/\s+/gs, ' ').trim();
+		const name = (sdklib[id]?.name || '').replace(/\s+/gs, ' ').trim();
 
 		if (analysis.errors[id]) {
 			vkp.push('');
@@ -206,9 +274,13 @@ export function serializeSwilib(phone, sdklib, swilib) {
 	return vkp.join('\r\n');
 }
 
-export function getPlatformByPhone(phone) {
-	let m = phone.match(/^(.*?)(?:v|sw)([\d+_]+)$/i);
-	let model = m[1];
+export function getPlatformByPhone(phone: string): string {
+	if (swilibConfig.platforms.includes(phone))
+		return phone;
+	const m = phone.match(/^(.*?)(?:v|sw)([\d+_]+)$/i);
+	if (!m)
+		throw new Error(`Invalid phone model: ${phone}`);
+	const model = m[1];
 	if (/^(EL71|E71|CL61|M72|C1F0)$/i.test(model))
 		return "ELKA";
 	if (/^(C81|S75|SL75|S68)$/i.test(model))
@@ -218,20 +290,20 @@ export function getPlatformByPhone(phone) {
 	return "SG";
 }
 
-export function getPlatformSwilibFromSDK(sdk, platform) {
-	const SWI_FUNC_RE = /\/\*\*(.*?)\*\/|__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w\d_]+)\);/sig;
+export function getPlatformSwilibFromSDK(sdk: string, platform: string): SdkEntry[] {
+	const SWI_FUNC_RE = /\/\*\*(.*?)\*\/|__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w_]+)\);/sig;
 	const CODE_LINE_RE = /^# (\d+) "([^"]+)"/img;
 
 	sdk = path.resolve(sdk);
 
-	let defines = {
+	const defines: Record<string, string[]> = {
 		NSG:	["-DNEWSGOLD"],
 		ELKA:	["-DNEWSGOLD -DELKA"],
 		X75:	["-DX75"],
 		SG:		[]
 	};
 
-	let args = [
+	const args = [
 		"-E",
 		"-CC",
 		"-nostdinc",
@@ -245,24 +317,24 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 		`${sdk}/swilib/include/swilib.h`,
 	];
 
-	let { stdout, stderr, status } = child_process.spawnSync('arm-none-eabi-gcc', args);
+	const { stdout, stderr, status } = child_process.spawnSync('arm-none-eabi-gcc', args);
 	if (status != 0)
 		throw new Error(`GCC ERROR: ${stderr.toString()}`);
 
-	stdout = stdout.toString();
+	const header = stdout.toString();
 
-	let m;
-	let sourceFiles = [];
-	while ((m = CODE_LINE_RE.exec(stdout))) {
+	let m: RegExpExecArray | RegExpMatchArray | null;
+	const sourceFiles: SourceFile[] = [];
+	while ((m = CODE_LINE_RE.exec(header))) {
 		sourceFiles.push({
 			index: CODE_LINE_RE.lastIndex - m[0].length,
 			file: path.resolve(m[2])
 		});
 	}
 
-	let getFileByIndex = (index) => {
+	const getFileByIndex = (index: number) => {
 		let found;
-		for (let entry of sourceFiles) {
+		for (const entry of sourceFiles) {
 			if (index >= entry.index) {
 				found = entry;
 			}
@@ -270,13 +342,16 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 		return found?.file;
 	};
 
-	let table = [];
-	let prevDoxygen;
-	while ((m = SWI_FUNC_RE.exec(stdout))) {
-		let [fullMatchStr, doxygen, name, swiNumberStr, symbol] = m;
+	const table: SdkEntry[] = [];
+	let prevDoxygen: DoxygenEntry | undefined;
+	while ((m = SWI_FUNC_RE.exec(header))) {
+		const [fullMatchStr, doxygen, name, swiNumberStr, symbol] = m;
 
-		let offset = SWI_FUNC_RE.lastIndex - fullMatchStr.length;
-		let sourceFile = getFileByIndex(offset).replace(`${sdk}/swilib/include/`, '');
+		const offset = SWI_FUNC_RE.lastIndex - fullMatchStr.length;
+		const sourceFile = getFileByIndex(offset)?.replace(`${sdk}/swilib/include/`, '');
+
+		if (!sourceFile)
+			throw new Error(`Cannot find source file for offset ${offset}.`);
 
 		if (doxygen) {
 			prevDoxygen = {
@@ -289,11 +364,11 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 
 		if (prevDoxygen) {
 			if (prevDoxygen.file != sourceFile) {
-				prevDoxygen = null;
-			} else if (stdout.substring(prevDoxygen.offset, offset).match(/\S/)) {
-				prevDoxygen = null;
+				prevDoxygen = undefined;
+			} else if (header.substring(prevDoxygen.offset, offset).match(/\S/)) {
+				prevDoxygen = undefined;
 			} else if (prevDoxygen.value.indexOf('@{') >= 0 || prevDoxygen.value.indexOf('@}') >= 0) {
-				prevDoxygen = null;
+				prevDoxygen = undefined;
 			}
 		}
 
@@ -309,47 +384,52 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 
 		if (!table[swiNumber]) {
 			table[swiNumber] = {
-				id:			swiNumber,
+				id: swiNumber,
 				name,
 				symbol,
-				type:		SwiType.FUNCTION,
-				functions:	[],
-				pointers:	[],
-				aliases:	[],
-				files:		[],
-				platforms:	null,
-				builtin:	null,
-				pointerTo:	null,
+				type: SwiType.FUNCTION,
+				definitions: [],
+				functions: [],
+				pointers: [],
+				aliases: [],
+				files: [],
+				platforms: undefined,
+				builtin: undefined,
+				pointerTo: SdkPointerType.UNKNOWN,
 			};
 		}
 
 		if (prevDoxygen) {
 			// Platform-dependent function
 			if ((m = prevDoxygen.value.match(/@platforms\s+(.*?)$/im))) {
-				table[swiNumber].platforms = table[swiNumber].platforms || [];
-				for (let funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+				table[swiNumber].platforms = table[swiNumber].platforms ?? [];
+				for (const funcPlatform of m[1].trim().split(/\s*,\s*/)) {
 					if (!swilibConfig.platforms.includes(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
-					if (!table[swiNumber].platforms.includes(funcPlatform))
-						table[swiNumber].platforms.push(funcPlatform);
+					if (!table[swiNumber].platforms!.includes(funcPlatform))
+						table[swiNumber].platforms!.push(funcPlatform);
 				}
 			}
 			// Builtin function
 			else if ((m = prevDoxygen.value.match(/@builtin\s+(.*?)$/im))) {
-				table[swiNumber].builtin = table[swiNumber].builtin || [];
-				for (let funcPlatform of m[1].trim().split(/\s*,\s*/)) {
+				table[swiNumber].builtin = table[swiNumber].builtin ?? [];
+				for (const funcPlatform of m[1].trim().split(/\s*,\s*/)) {
 					if (!swilibConfig.platforms.includes(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
-					if (!table[swiNumber].builtin.includes(funcPlatform))
-						table[swiNumber].builtin.push(funcPlatform);
+					if (!table[swiNumber].builtin!.includes(funcPlatform))
+						table[swiNumber].builtin!.push(funcPlatform);
 				}
 			}
 			// Builtin function
 			else if ((m = prevDoxygen.value.match(/@pointer-type\s+(.*?)$/im))) {
-				let pointerMemoryType = m[1].trim();
-				if (!["RAM", "FLASH"].includes(pointerMemoryType))
+				const pointersTypes: Record<string, SdkPointerType> = {
+					RAM: SdkPointerType.RAM,
+					FLASH: SdkPointerType.FLASH,
+				};
+				const pointerMemoryType = m[1].trim();
+				if (!(pointerMemoryType in pointersTypes))
 					throw new Error(`Invalid pointer type: ${pointerMemoryType}`);
-				table[swiNumber].pointerTo = pointerMemoryType;
+				table[swiNumber].pointerTo = pointersTypes[pointerMemoryType];
 			}
 		}
 
@@ -357,10 +437,12 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 			table[swiNumber].files.push(sourceFile);
 		table[swiNumber].aliases.push(symbol);
 
+		table[swiNumber].definitions.push({ name, symbol, file: sourceFile });
+
 		if (isPointer) {
-			table[swiNumber].pointers.push({ name, symbol });
+			table[swiNumber].pointers.push({ name, symbol, file: sourceFile });
 		} else {
-			table[swiNumber].functions.push({ name, symbol });
+			table[swiNumber].functions.push({ name, symbol, file: sourceFile });
 
 			if (table[swiNumber].functions.length == 1) {
 				table[swiNumber].symbol = table[swiNumber].functions[0].symbol;
@@ -368,11 +450,11 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 			}
 		}
 
-		prevDoxygen = null;
+		prevDoxygen = undefined;
 	}
 
 	for (let id = 0; id < table.length; id++) {
-		let func = table[id];
+		const func = table[id];
 		if (!func)
 			continue;
 
@@ -380,25 +462,25 @@ export function getPlatformSwilibFromSDK(sdk, platform) {
 		func.type = detectSdkEntryType(table[id]);
 
 		if (func.type == SwiType.POINTER && !func.pointerTo)
-			func.pointerTo = 'RAM';
+			func.pointerTo = SdkPointerType.RAM;
 	}
 
 	return table;
 }
 
-export function compareSwilibFunc(swiNumber, oldName, newName) {
+export function compareSwilibFunc(swiNumber: number, oldName: string, newName: string): boolean {
 	if (newName == oldName)
 		return true;
-	let aliases = swiNumber[+swiNumber];
+	const aliases = swilibConfig.aliases[swiNumber];
 	if (aliases)
 		return aliases.includes(oldName);
 	return false;
 }
 
-export function getSwiBlib(swilib) {
-	let blib = Buffer.alloc(16 * 1024);
+export function getSwiBlib(swilib: Swilib): Buffer {
+	const blib = Buffer.alloc(16 * 1024);
 	for (let id = 0; id < 0x1000; id++) {
-		let offset = id * 4;
+		const offset = id * 4;
 		if (swilib.entries[id]?.value != null) {
 			blib.writeUInt32LE(swilib.entries[id].value, offset);
 		} else {
@@ -408,39 +490,38 @@ export function getSwiBlib(swilib) {
 	return blib;
 }
 
-export function getSwiTypeName(type) {
+export function getSwiTypeName(type: SwiType): string {
 	switch (type) {
 		case SwiType.EMPTY:		return "EMPTY";
 		case SwiType.FUNCTION:	return "FUNCTION";
 		case SwiType.POINTER:	return "POINTER";
 		case SwiType.VALUE:		return "NUMERIC_VALUE";
 	}
-	return "???";
 }
 
-export function getSwiValueTypeName(type) {
+export function getSwiValueTypeName(type: SwiValueType): string {
 	switch (type) {
 		case SwiValueType.POINTER_TO_FLASH:	return "POINTER_TO_FLASH";
 		case SwiValueType.POINTER_TO_RAM:	return "POINTER_TO_RAM";
 		case SwiValueType.VALUE:			return "NUMERIC_VALUE";
 		case SwiValueType.UNDEFINED:		return "UNDEFINED";
 	}
-	return "???";
 }
 
-function checkTypeConsistency(sdkEntry, swilibEntry) {
-	let typesMap = {
+function checkTypeConsistency(sdkEntry: SdkEntry, swilibEntry: SwiEntry): string | undefined {
+	const typesMap: Record<SwiType, SwiValueType[]> = {
 		[SwiType.FUNCTION]:		[SwiValueType.POINTER_TO_FLASH],
 		[SwiType.POINTER]:		[SwiValueType.POINTER_TO_FLASH, SwiValueType.POINTER_TO_RAM],
 		[SwiType.VALUE]:		[SwiValueType.VALUE],
+		[SwiType.EMPTY]:		[],
 	};
 	if (!typesMap[sdkEntry.type].includes(swilibEntry.type))
 		return `Type mismatch: ${getSwiValueTypeName(swilibEntry.type)} (SWILIB) is not allowed for ${getSwiTypeName(sdkEntry.type)} (SDK).`;
-	return null;
+	return undefined;
 }
 
-function parseSwilibFuncName(comm) {
-		comm = comm
+function parseSwilibFuncName(comm: string): string | undefined {
+	comm = comm
 		.replace(/^\s*0x[a-f0-9]+/i, '')
 		.replace(/\/\/.*?$/i, '') // comments in comments
 		.replace(/(;|\*NEW\*|\?\?\?)/gi, '')
@@ -449,21 +530,21 @@ function parseSwilibFuncName(comm) {
 		.replace(/С/gi, 'C') // cyrillic C
 		.trim();
 
-	let m;
-	if ((m = comm.match(/^-?([a-f0-9]+)(?::?\s+|:)(?:([\w\d_ *-]*\s*[*\s]+))?([\w\d_]+)\s*\(/i))) {
+	let m: RegExpMatchArray | null;
+	if ((m = comm.match(/^-?([a-f0-9]+)(?::?\s+|:)([\w_ *-]*\s*[*\s]+)?([\w_]+)\s*\(/i))) {
 		return m[3];
-	} else if ((m = comm.match(/^-?([a-f0-9]+)(?::?\s+|:)(?:([\w\d_ *-]*\s*[*\s]+))?([\w\d_]+)$/i))) {
+	} else if ((m = comm.match(/^-?([a-f0-9]+)(?::?\s+|:)([\w_ *-]*\s*[*\s]+)?([\w_]+)$/i))) {
 		return m[3];
 	} else if ((m = comm.match(/^([a-f0-9]+):$/i))) {
 		return `FUNC_${m[1]}`;
 	}
 
-	return false;
+	return undefined;
 }
 
-function detectSdkEntryType(entry) {
+function detectSdkEntryType(entry: SdkEntry): SwiType {
 	if (!entry.functions.length) {
-		if (entry.name.match(/^[\w\d\s]+\s([\w\d]+)\s*\(\s*(void)?\s*\)/i)) {
+		if (entry.name.match(/^[\w\s]+\s(\w+)\s*\(\s*(void)?\s*\)/i)) {
 			return SwiType.VALUE;
 		} else {
 			return SwiType.POINTER;
@@ -472,9 +553,9 @@ function detectSdkEntryType(entry) {
 	return SwiType.FUNCTION;
 }
 
-function getSwilibValueType(entry) {
+function getSwilibValueType(entry: SwiEntry): SwiValueType {
 	if (entry != null && entry.value != 0xFFFFFFFF) {
-		let addr = BigInt(entry.value) & 0xFF000000n;
+		const addr = BigInt(entry.value) & 0xFF000000n;
 		if (addr >= 0xA0000000n && addr < 0xA8000000n) {
 			return SwiValueType.POINTER_TO_FLASH;
 		} else if (addr >= 0xA8000000n && addr < 0xB0000000n) {
@@ -486,11 +567,11 @@ function getSwilibValueType(entry) {
 	return SwiValueType.UNDEFINED;
 }
 
-function formatId(id) {
-	return (+id).toString(16).padStart(3, 0).toUpperCase();
+function formatId(id: number): string {
+	return id.toString(16).padStart(3, "0").toUpperCase();
 }
 
-function isSameFunctions(targetFunc, checkFunc) {
+function isSameFunctions(targetFunc: SdkEntry, checkFunc: SwiEntry) {
 	if (!targetFunc && !checkFunc)
 		return true;
 	if (!targetFunc || !checkFunc)
@@ -506,19 +587,19 @@ function isSameFunctions(targetFunc, checkFunc) {
 	return false;
 }
 
-function getFunctionPairs() {
-	let functionPairs = {};
-	for (let p of swilibConfig.pairs) {
+function getFunctionPairs(): Record<number, number[]> {
+	const functionPairs: Record<number, number[]> = {};
+	for (const p of swilibConfig.pairs) {
 		for (let i = 0; i < p.length; i++)
 			functionPairs[p[i]] = p;
 	}
 	return functionPairs;
 }
 
-function isStrInArray(arr, search) {
+function isStrInArray(arr: string[] | undefined, search: string) {
 	if (arr) {
 		search = search.toLowerCase();
-		for (let word of arr) {
+		for (const word of arr) {
 			if (word.toLowerCase() === search)
 				return true;
 		}

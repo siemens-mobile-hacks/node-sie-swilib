@@ -1,5 +1,13 @@
 // Swilib quirks
-export default {
+export interface SwilibConfig {
+  platforms: string[];
+  phones: string[];
+  patches: Record<string, number>;
+  pairs: number[][];
+  aliases: Record<string, string[]>;
+}
+
+export const swilibConfig: SwilibConfig = {
 	// Platforms
 	platforms: ["ELKA", "NSG", "X75", "SG"],
 
