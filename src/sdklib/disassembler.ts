@@ -1,7 +1,9 @@
 import child_process from 'node:child_process';
-import { analyzeSwilib, SdkEntry, Swilib, SwiType } from './swilib.js';
 import { sprintf } from 'sprintf-js';
-import { SwiPlatform } from "./config.js";
+import { analyzeSwilib } from "#src/swilib/analyze";
+import { Swilib, SwiType } from "#src/swilib/parse";
+import { SwilibConfig, SwiPlatform } from "#src/config";
+import { SdkEntry } from "#src/sdklib/parse";
 
 export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): string {
 	const defines: Record<SwiPlatform, string[]> = {
@@ -42,8 +44,8 @@ export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): stri
 		.replace(/^\n+$/gm, '\n');
 }
 
-export function getGhidraSymbols(platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
-	const analysis = analyzeSwilib(platform, sdklib, swilib);
+export function getGhidraSymbols(swilibConfig: SwilibConfig, platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
+	const analysis = analyzeSwilib(swilibConfig, platform, sdklib, swilib);
 	const symbols: string[] = [];
 	for (let id = 0; id < sdklib.length; id++) {
 		const func = swilib.entries[id];
@@ -70,8 +72,8 @@ export function getGhidraSymbols(platform: SwiPlatform, sdklib: SdkEntry[], swil
 	return symbols.join("\n");
 }
 
-export function getIdaSymbols(platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
-	const analysis = analyzeSwilib(platform, sdklib, swilib);
+export function getIdaSymbols(swilibConfig: SwilibConfig, platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
+	const analysis = analyzeSwilib(swilibConfig, platform, sdklib, swilib);
 	const symbols: string[] = [
 		`#include <idc.idc>`,
 		`static main() {`,

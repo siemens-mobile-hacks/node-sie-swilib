@@ -4,14 +4,17 @@
 		"rootDir": ".",
 		"outDir": "./dist",
 		"target": "ESNext",
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"strict": true,
 		"skipLibCheck": true,
 		"lib": ["ESNext"],
-		"typeRoots": ["./node_modules/@types", "./src/@types"]
+		"typeRoots": ["./node_modules/@types", "./src/@types"],
+		"paths": {
+			"#src/*": ["./src/*"]
+		}
 	},
 	"include": ["src/**/*.ts"],
 	"exclude": ["node_modules", "dist"]

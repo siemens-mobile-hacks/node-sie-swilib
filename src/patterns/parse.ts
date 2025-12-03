@@ -36,27 +36,6 @@ export function parsePatterns(code: string | Buffer): SwilibPattern[] {
 	return patterns;
 }
 
-export function serializePatterns(patterns: SwilibPattern[]): string {
-	const lines = [`[Library]`];
-	for (let idStr in patterns) {
-		const id = +idStr;
-
-		if (id && (id % 16) == 0)
-			lines.push("");
-
-		let ptr = patterns[id];
-		if (!ptr) {
-			lines.push(`${id.toString(16).padStart(2, '0').toUpperCase()}:`);
-		} else if (ptr.pattern) {
-			lines.push(`${id.toString(16).padStart(2, '0').toUpperCase()}:${ptr.name.replace(/\s+/gs, ' ')} = ${ptr.pattern}`);
-		} else {
-			lines.push(`${id.toString(16).padStart(2, '0').toUpperCase()}:${ptr.name.replace(/\s+/gs, ' ')}`);
-		}
-	}
-	lines.push("");
-	return lines.join("\n");
-}
-
 function parsePatternsFuncName(comm: string) {
 	let m: RegExpMatchArray | null;
 	if (!comm.length) {
