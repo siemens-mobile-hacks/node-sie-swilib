@@ -1,44 +1,45 @@
-import { analyzeSwilib } from "#src/swilib/analyze";
+import { analyzeSwilib } from "#src/swilib/analyze.js";
 import { sprintf } from "sprintf-js";
-import { SwilibConfig } from "#src/config";
-import { Swilib, SwiType, SwiValueType } from "#src/swilib/parse";
-import { getPlatformByPhone } from "#src/swilib/utils";
-import { SdkEntry } from "#src/sdklib/parse";
+import { SwilibConfig } from "#src/config.js";
+import { Swilib, SwiType, SwiValueType } from "#src/swilib/parse.js";
+import { Sdklib } from "#src/sdklib/parse.js";
 
-export function serializeSwilib(swilibConfig: SwilibConfig, phone: string, sdklib: SdkEntry[], swilib: Swilib): string {
-	const platform = getPlatformByPhone(swilibConfig, phone);
-	const analysis = analyzeSwilib(swilibConfig, platform, sdklib, swilib);
-	const vkp = [
-		`; ${phone}`,
-		`${sprintf("+%08X", swilib.offset)}`,
-		`#pragma enable old_equal_ff`,
-	];
-	for (let id = 0; id < sdklib.length; id++) {
-		const func = swilib.entries[id];
+export function serializeSwilib(swilibConfig: SwilibConfig, swilib: Swilib, sdklib: Sdklib): string {
+	const analysis = analyzeSwilib(swilibConfig, swilib, sdklib);
+	const vkp = [];
+
+	if (swilib.target)
+		vkp.push(`; ${swilib.target}`);
+	vkp.push(`${sprintf("+%08X", swilib.offset)}`);
+	vkp.push(`#pragma enable old_equal_ff`);
+
+	for (let id = 0; id < sdklib.entries.length; id++) {
+		const swiEntry = swilib.entries[id];
+		const sdkEntry = sdklib.entries[id];
 		if ((id % 16) == 0)
 			vkp.push('');
 
-		const name = (sdklib[id]?.name || '').replace(/\s+/gs, ' ').trim();
+		const name = (sdkEntry?.name || '').replace(/\s+/gs, ' ').trim();
 
 		if (analysis.errors[id]) {
 			vkp.push('');
 			vkp.push(`; [ERROR] ${analysis.errors[id]}`);
-			if (func?.value != null) {
-				vkp.push(sprintf(";%03X: 0x%08X   ; %3X: %s", id * 4, func.value, id, name));
+			if (swiEntry?.value != null) {
+				vkp.push(sprintf(";%03X: 0x%08X   ; %3X: %s", id * 4, swiEntry.value, id, name));
 			} else {
 				vkp.push(sprintf(";%03X:              ; %3X: %s", id * 4, id, name));
 			}
 			vkp.push('');
-		} else if (sdklib[id]) {
-			if (func?.comment != null) {
-				if (func?.value != null) {
-					vkp.push(sprintf("%04X: 0x%08X   ;%s", id * 4, func.value, func.comment));
+		} else if (sdkEntry) {
+			if (swiEntry?.comment != null) {
+				if (swiEntry?.value != null) {
+					vkp.push(sprintf("%04X: 0x%08X   ;%s", id * 4, swiEntry.value, swiEntry.comment));
 				} else {
-					vkp.push(sprintf(";%03X:              ;%s", id * 4, id, func.comment));
+					vkp.push(sprintf(";%03X:              ;%s", id * 4, id, swiEntry.comment));
 				}
 			} else {
-				if (func?.value != null) {
-					vkp.push(sprintf("%04X: 0x%08X   ; %3X: %s", id * 4, func.value, id, name));
+				if (swiEntry?.value != null) {
+					vkp.push(sprintf("%04X: 0x%08X   ; %3X: %s", id * 4, swiEntry.value, id, name));
 				} else {
 					vkp.push(sprintf(";%03X:              ; %3X: %s", id * 4, id, name));
 				}
@@ -50,7 +51,7 @@ export function serializeSwilib(swilibConfig: SwilibConfig, phone: string, sdkli
 	vkp.push('');
 	vkp.push(`#pragma enable old_equal_ff`);
 	vkp.push(`+0`);
-	return vkp.join('\r\n');
+	return vkp.join('\r\n') + "\r\n";
 }
 
 export function formatId(id: number): string {

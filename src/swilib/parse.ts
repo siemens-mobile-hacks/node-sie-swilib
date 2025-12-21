@@ -1,4 +1,6 @@
 import { vkpNormalize, VkpParseError, vkpRawParser } from "@sie-js/vkp";
+import { SwilibConfig, SwiPlatform } from "#src/config.js";
+import { getSwilibPlatform } from "#src/swilib/utils.js";
 
 export enum SwiValueType {
 	UNDEFINED,
@@ -25,13 +27,21 @@ export type SwiEntry = {
 export type Swilib = {
 	offset: number;
 	entries: SwiEntry[];
+	target?: string;
+	platform: SwiPlatform;
 };
 
 export type SwilibParserOptions = {
 	comments?: boolean;
+	target?: string;
+	platform?: SwiPlatform;
 };
 
-export function parseSwilibPatch(code: string | Buffer, options: SwilibParserOptions = {}): Swilib {
+export function parseSwilibPatch(
+	swilibConfig: SwilibConfig,
+	code: string | Buffer,
+	options: SwilibParserOptions = {}
+): Swilib {
 	let offset: number | undefined;
 	const entries: SwiEntry[] = [];
 	let end = false;
@@ -40,6 +50,10 @@ export function parseSwilibPatch(code: string | Buffer, options: SwilibParserOpt
 		comments: false,
 		...options,
 	};
+
+	let platform: SwiPlatform = "NSG";
+	if (!validOptions.platform && validOptions.target)
+		platform = getSwilibPlatform(swilibConfig, validOptions.target);
 
 	if (Buffer.isBuffer(code))
 		code = vkpNormalize(code);
@@ -82,7 +96,12 @@ export function parseSwilibPatch(code: string | Buffer, options: SwilibParserOpt
 		}
 	});
 
-	return {offset: offset ?? 0, entries};
+	return {
+		offset: offset ?? 0,
+		target: validOptions.target,
+		platform,
+		entries
+	};
 }
 
 function parseSwilibFuncName(comm: string): string | undefined {

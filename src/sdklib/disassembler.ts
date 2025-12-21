@@ -1,11 +1,11 @@
-import child_process from 'node:child_process';
 import { sprintf } from 'sprintf-js';
-import { analyzeSwilib } from "#src/swilib/analyze";
-import { Swilib, SwiType } from "#src/swilib/parse";
-import { SwilibConfig, SwiPlatform } from "#src/config";
-import { SdkEntry } from "#src/sdklib/parse";
+import { analyzeSwilib } from "#src/swilib/analyze.js";
+import { Swilib, SwiType } from "#src/swilib/parse.js";
+import { SwilibConfig, SwiPlatform } from "#src/config.js";
+import { Sdklib } from "#src/sdklib/parse.js";
+import promiseSpawn from "@npmcli/promise-spawn";
 
-export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): string {
+export async function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): Promise<string> {
 	const defines: Record<SwiPlatform, string[]> = {
 		NSG:  ["-DNEWSGOLD"],
 		ELKA: ["-DNEWSGOLD -DELKA"],
@@ -28,10 +28,8 @@ export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): stri
 		`${sdkPath}/swilib/include/swilib.h`,
 	];
 
-	const result = child_process.spawnSync('arm-none-eabi-gcc', args);
-	const { stdout, stderr, status } = result;
-
-	if (status !== 0)
+	const { stdout, stderr, code } = await promiseSpawn('arm-none-eabi-gcc', args);
+	if (code !== 0)
 		throw new Error(`GCC ERROR: ${stderr.toString()}`);
 
 	return stdout.toString()
@@ -44,54 +42,56 @@ export function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): stri
 		.replace(/^\n+$/gm, '\n');
 }
 
-export function getGhidraSymbols(swilibConfig: SwilibConfig, platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
-	const analysis = analyzeSwilib(swilibConfig, platform, sdklib, swilib);
+export function getGhidraSymbols(swilibConfig: SwilibConfig, swilib: Swilib, sdklib: Sdklib): string {
+	const analysis = analyzeSwilib(swilibConfig, swilib, sdklib);
 	const symbols: string[] = [];
-	for (let id = 0; id < sdklib.length; id++) {
-		const func = swilib.entries[id];
-		if (!func || func.value == null)
+	for (let id = 0; id < sdklib.entries.length; id++) {
+		const swiEntry = swilib.entries[id];
+		const sdkEntry = sdklib.entries[id];
+		if (!swiEntry || swiEntry.value == null)
 			continue;
 		if (analysis.errors[id])
 			continue;
 
-		if (sdklib[id].type == SwiType.FUNCTION) {
+		if (sdkEntry.type == SwiType.FUNCTION) {
 			// Function
-			const signature = sdklib[id].name.replace(/\s+/g, ' ').trim();
-			symbols.push(sprintf("F\t%08X\t%s\t%s", func.value & ~1, sdklib[id].symbol, signature));
-		} else if (sdklib[id].type == SwiType.POINTER) {
-			let type = dereferenceCType(parseReturnType(sdklib[id].name));
+			const signature = sdkEntry.name.replace(/\s+/g, ' ').trim();
+			symbols.push(sprintf("F\t%08X\t%s\t%s", swiEntry.value & ~1, sdkEntry.symbol, signature));
+		} else if (sdkEntry.type == SwiType.POINTER) {
+			let type = dereferenceCType(parseReturnType(sdkEntry.name));
 			if (type.toLowerCase() != 'void') {
 				// Data
-				symbols.push(sprintf("D\t%08X\t%s\t%s", func.value, sdklib[id].symbol, type));
+				symbols.push(sprintf("D\t%08X\t%s\t%s", swiEntry.value, sdkEntry.symbol, type));
 			} else {
 				// Label
-				symbols.push(sprintf("L\t%08X\t%s", func.value, sdklib[id].symbol));
+				symbols.push(sprintf("L\t%08X\t%s", swiEntry.value, sdkEntry.symbol));
 			}
 		}
 	}
-	return symbols.join("\n");
+	return symbols.join("\n") + "\n";
 }
 
-export function getIdaSymbols(swilibConfig: SwilibConfig, platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): string {
-	const analysis = analyzeSwilib(swilibConfig, platform, sdklib, swilib);
+export function getIdaSymbols(swilibConfig: SwilibConfig, swilib: Swilib, sdklib: Sdklib): string {
+	const analysis = analyzeSwilib(swilibConfig, swilib, sdklib);
 	const symbols: string[] = [
 		`#include <idc.idc>`,
 		`static main() {`,
 	];
-	for (let id = 0; id < sdklib.length; id++) {
+	for (let id = 0; id < sdklib.entries.length; id++) {
 		const func = swilib.entries[id];
+		const sdkEntry = sdklib.entries[id];
 		if (!func || func.value == null)
 			continue;
 		if (analysis.errors[id])
 			continue;
-		if (sdklib[id].type == SwiType.FUNCTION) {
-			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value & ~1)}, "${sdklib[id].symbol}");`);
-		} else if (sdklib[id].type == SwiType.POINTER) {
-			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value)}, "${sdklib[id].symbol}");`);
+		if (sdkEntry.type == SwiType.FUNCTION) {
+			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value & ~1)}, "${sdkEntry.symbol}");`);
+		} else if (sdkEntry.type == SwiType.POINTER) {
+			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value)}, "${sdkEntry.symbol}");`);
 		}
 	}
 	symbols.push(`}`);
-	return symbols.join("\n");
+	return symbols.join("\n") + "\n";
 }
 
 function dereferenceCType(type: string): string {

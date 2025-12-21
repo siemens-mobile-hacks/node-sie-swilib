@@ -1,10 +1,12 @@
-export * from '#src/swilib/analyze';
-export * from '#src/swilib/parse';
-export * from '#src/swilib/serialize';
-export * from '#src/swilib/utils';
+export * from '#src/swilib/analyze.js';
+export * from '#src/swilib/parse.js';
+export * from '#src/swilib/serialize.js';
+export * from '#src/swilib/utils.js';
 
-export * from '#src/sdklib/parse';
-export * from '#src/sdklib/disassembler';
+export * from '#src/sdklib/parse.js';
+export * from '#src/sdklib/disassembler.js';
 
-export * from '#src/patterns/parse';
-export * from '#src/patterns/serialize';
+export * from '#src/patterns/parse.js';
+export * from '#src/patterns/serialize.js';
+
+export * from '#src/config.js';

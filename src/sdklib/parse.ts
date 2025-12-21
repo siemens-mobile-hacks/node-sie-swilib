@@ -1,7 +1,7 @@
-import { SwiType } from "#src/swilib/parse";
-import { isValidSwiPlatform, loadSwilibConfig, SwiPlatform } from "#src/config";
+import { SwiType } from "#src/swilib/parse.js";
+import { isValidSwilibPlatform, SwiPlatform } from "#src/config.js";
 import path from "path";
-import child_process from "node:child_process";
+import promiseSpawn from "@npmcli/promise-spawn";
 
 export type SdkDefinition = {
 	name: string
@@ -30,6 +30,11 @@ export type SdkEntry = {
 	pointerTo: SdkPointerType;
 };
 
+export type Sdklib = {
+	entries: SdkEntry[];
+	platform: SwiPlatform;
+};
+
 type SourceFile = {
 	index: number;
 	file: string;
@@ -41,18 +46,19 @@ type DoxygenEntry = {
 	file: string;
 };
 
-export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
+export async function parseLibraryFromSDK(sdkPath: string, platform: SwiPlatform): Promise<Sdklib> {
 	const SWI_FUNC_RE = /\/\*\*(.*?)\*\/|__swi_begin\s+(.*?)\s+__swi_end\(([xa-f0-9]+), ([\w_]+)\);/sig;
 	const CODE_LINE_RE = /^# (\d+) "([^"]+)"/img;
 
-	const swilibConfig = loadSwilibConfig(`${sdkPath}/swilib/config.toml`);
-
 	const defines: Record<SwiPlatform, string[]> = {
 		NSG:	["-DNEWSGOLD"],
-		ELKA:	["-DNEWSGOLD -DELKA"],
+		ELKA:	["-DNEWSGOLD", "-DELKA"],
 		X75:	["-DX75"],
 		SG:		[]
 	};
+
+	if (!defines[platform])
+		throw new Error(`Invalid platform: ${platform}`);
 
 	const args = [
 		"-E",
@@ -68,8 +74,8 @@ export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 		`${sdkPath}/swilib/include/swilib.h`,
 	];
 
-	const { stdout, stderr, status } = child_process.spawnSync('arm-none-eabi-gcc', args);
-	if (status != 0)
+	const { stdout, stderr, code } = await promiseSpawn('arm-none-eabi-gcc', args);
+	if (code != 0)
 		throw new Error(`GCC ERROR: ${stderr.toString()}`);
 
 	const header = stdout.toString();
@@ -93,7 +99,7 @@ export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 		return found?.file;
 	};
 
-	const table: SdkEntry[] = [];
+	const entries: SdkEntry[] = [];
 	let prevDoxygen: DoxygenEntry | undefined;
 	while ((m = SWI_FUNC_RE.exec(header))) {
 		const [fullMatchStr, doxygen, name, swiNumberStr, symbol] = m;
@@ -133,8 +139,8 @@ export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 			swiNumber = swiNumber - 0x4000;
 		}
 
-		if (!table[swiNumber]) {
-			table[swiNumber] = {
+		if (!entries[swiNumber]) {
+			entries[swiNumber] = {
 				id: swiNumber,
 				name,
 				symbol,
@@ -153,22 +159,22 @@ export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 		if (prevDoxygen) {
 			// Platform-dependent function
 			if ((m = prevDoxygen.value.match(/@platforms\s+(.*?)$/im))) {
-				table[swiNumber].platforms = table[swiNumber].platforms ?? [];
+				entries[swiNumber].platforms = entries[swiNumber].platforms ?? [];
 				for (const funcPlatform of m[1].trim().split(/\s*,\s*/) as SwiPlatform[]) {
-					if (!isValidSwiPlatform(funcPlatform))
+					if (!isValidSwilibPlatform(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
-					if (!table[swiNumber].platforms!.includes(funcPlatform))
-						table[swiNumber].platforms!.push(funcPlatform);
+					if (!entries[swiNumber].platforms!.includes(funcPlatform))
+						entries[swiNumber].platforms!.push(funcPlatform);
 				}
 			}
 			// Builtin function
 			else if ((m = prevDoxygen.value.match(/@builtin\s+(.*?)$/im))) {
-				table[swiNumber].builtin = table[swiNumber].builtin ?? [];
+				entries[swiNumber].builtin = entries[swiNumber].builtin ?? [];
 				for (const funcPlatform of m[1].trim().split(/\s*,\s*/) as SwiPlatform[]) {
-					if (!isValidSwiPlatform(funcPlatform))
+					if (!isValidSwilibPlatform(funcPlatform))
 						throw new Error(`Invalid platform: ${funcPlatform}`);
-					if (!table[swiNumber].builtin!.includes(funcPlatform))
-						table[swiNumber].builtin!.push(funcPlatform);
+					if (!entries[swiNumber].builtin!.includes(funcPlatform))
+						entries[swiNumber].builtin!.push(funcPlatform);
 				}
 			}
 			// Builtin function
@@ -180,43 +186,46 @@ export function getSdkLib(sdkPath: string, platform: SwiPlatform): SdkEntry[] {
 				const pointerMemoryType = m[1].trim();
 				if (!(pointerMemoryType in pointersTypes))
 					throw new Error(`Invalid pointer type: ${pointerMemoryType}`);
-				table[swiNumber].pointerTo = pointersTypes[pointerMemoryType];
+				entries[swiNumber].pointerTo = pointersTypes[pointerMemoryType];
 			}
 		}
 
-		if (!table[swiNumber].files.includes(sourceFile))
-			table[swiNumber].files.push(sourceFile);
-		table[swiNumber].aliases.push(symbol);
+		if (!entries[swiNumber].files.includes(sourceFile))
+			entries[swiNumber].files.push(sourceFile);
+		entries[swiNumber].aliases.push(symbol);
 
-		table[swiNumber].definitions.push({ name, symbol, file: sourceFile });
+		entries[swiNumber].definitions.push({ name, symbol, file: sourceFile });
 
 		if (isPointer) {
-			table[swiNumber].pointers.push({ name, symbol, file: sourceFile });
+			entries[swiNumber].pointers.push({ name, symbol, file: sourceFile });
 		} else {
-			table[swiNumber].functions.push({ name, symbol, file: sourceFile });
+			entries[swiNumber].functions.push({ name, symbol, file: sourceFile });
 
-			if (table[swiNumber].functions.length == 1) {
-				table[swiNumber].symbol = table[swiNumber].functions[0].symbol;
-				table[swiNumber].name = table[swiNumber].functions[0].name;
+			if (entries[swiNumber].functions.length == 1) {
+				entries[swiNumber].symbol = entries[swiNumber].functions[0].symbol;
+				entries[swiNumber].name = entries[swiNumber].functions[0].name;
 			}
 		}
 
 		prevDoxygen = undefined;
 	}
 
-	for (let id = 0; id < table.length; id++) {
-		const func = table[id];
+	for (let id = 0; id < entries.length; id++) {
+		const func = entries[id];
 		if (!func)
 			continue;
 
 		// Analyze type
-		func.type = detectSdkEntryType(table[id]);
+		func.type = detectSdkEntryType(entries[id]);
 
 		if (func.type == SwiType.POINTER && !func.pointerTo)
 			func.pointerTo = SdkPointerType.RAM;
 	}
 
-	return table;
+	return {
+		entries,
+		platform
+	};
 }
 
 function detectSdkEntryType(entry: SdkEntry): SwiType {

@@ -1,4 +1,4 @@
-import { SwilibPattern } from "#src/patterns/parse";
+import { SwilibPattern } from "#src/patterns/parse.js";
 
 export function serializePatterns(patterns: SwilibPattern[]): string {
 	const lines = [`[Library]`];

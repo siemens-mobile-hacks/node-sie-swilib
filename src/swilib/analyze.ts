@@ -1,7 +1,7 @@
-import { isValidSwiPlatform, SwilibConfig, SwiPlatform } from "#src/config";
-import { formatId, getSwiTypeName, getSwiValueTypeName } from "#src/swilib/serialize";
-import { SwiEntry, Swilib, SwiType, SwiValueType } from "#src/swilib/parse";
-import { SdkEntry } from "#src/sdklib/parse";
+import { SwilibConfig } from "#src/config.js";
+import { formatId, getSwiTypeName, getSwiValueTypeName } from "#src/swilib/serialize.js";
+import { SwiEntry, Swilib, SwiType, SwiValueType } from "#src/swilib/parse.js";
+import { SdkEntry, Sdklib } from "#src/sdklib/parse.js";
 
 export type SwilibAnalysisResult = {
 	errors: Record<number, string>;
@@ -15,72 +15,71 @@ export type SwilibAnalysisResult = {
 	};
 };
 
-export function analyzeSwilib(swilibConfig: SwilibConfig, platform: SwiPlatform, sdklib: SdkEntry[], swilib: Swilib): SwilibAnalysisResult {
-	const maxFunctionId = Math.max(sdklib.length, swilib.entries.length);
+export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdklib): SwilibAnalysisResult {
+	const maxFunctionId = Math.max(sdklib.entries.length, swilib.entries.length);
 	const errors: Record<number, string> = {};
 	const duplicates: Record<number, number> = {};
 	const missing: number[] = [];
-	const functionPairs = getFunctionPairs(swilibConfig);
+	const functionPairs = getFunctionPairs(config);
+	const platform = swilib.platform;
 	let goodCnt = 0;
 	let totalCnt = 0;
 	let unusedCnt = 0;
 
-	if (!isValidSwiPlatform(platform))
-		throw new Error(`Invalid platform: ${platform}`);
-
 	for (let id = 0; id < maxFunctionId; id++) {
-		const func = swilib.entries[id];
-		if (!sdklib[id] && !func) {
+		const swiEntry = swilib.entries[id];
+		const sdkEntry = sdklib.entries[id];
+		if (!sdkEntry && !swiEntry) {
 			unusedCnt++;
 			continue;
 		}
 
 		totalCnt++;
 
-		if (!sdklib[id] && func) {
-			errors[id] = `Unknown function: ${func.symbol}`;
+		if (!sdkEntry && swiEntry) {
+			errors[id] = `Unknown function: ${swiEntry.symbol}`;
 			continue;
 		}
 
 		if (functionPairs[id]) {
 			const masterFunc = swilib.entries[functionPairs[id][0]];
-			if (masterFunc && (!func || masterFunc.value != func.value)) {
+			if (masterFunc && (!swiEntry || masterFunc.value != swiEntry.value)) {
 				const expectedValue = masterFunc.value.toString(16).padStart(8, '0').toUpperCase();
 				errors[id] = `Address must be equal with #${formatId(masterFunc.id)} ${masterFunc.symbol} (0x${expectedValue}).`;
 			}
 		}
 
-		if (sdklib[id] && !func) {
-			if (!sdklib[id].builtin)
+		if (sdkEntry && !swiEntry) {
+			if (!sdkEntry.builtin)
 				missing.push(id);
 			continue;
 		}
 
-		if (sdklib[id]?.builtin?.includes(platform) && func) {
-			errors[id] = `Invalid function: ${func.symbol} (Reserved by ELFLoader)`;
+		if (sdkEntry?.builtin?.includes(platform) && swiEntry) {
+			errors[id] = `Invalid function: ${swiEntry.symbol} (Reserved by ELFLoader)`;
 			continue;
 		}
 
-		if (sdklib[id]?.platforms && !sdklib[id].platforms!.includes(platform) && func) {
+		if (sdkEntry?.platforms && !sdkEntry.platforms!.includes(platform) && swiEntry) {
 			errors[id] = `Functions is not available on this platform.`;
 			continue;
 		}
 
-		if (!isSameFunctions(swilibConfig, sdklib[id], func)) {
-			errors[id] = `Invalid function: ${func.symbol}`;
+		if (!isSameFunctions(config, swiEntry, sdkEntry)) {
+			errors[id] = `Invalid function: ${swiEntry.symbol}`;
 			continue;
 		}
 
-		if ((BigInt(func.value) & 0xF0000000n) == 0xA0000000n) {
-			if (duplicates[func.value]) {
-				const dupId = duplicates[func.value];
-				if (!functionPairs[func.id] || !functionPairs[func.id].includes(dupId))
-					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib[dupId].symbol}.`;
+		if ((BigInt(swiEntry.value) & 0xF0000000n) == 0xA0000000n) {
+			if (duplicates[swiEntry.value]) {
+				const dupId = duplicates[swiEntry.value];
+				if (!functionPairs[swiEntry.id] || !functionPairs[swiEntry.id].includes(dupId))
+					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib.entries[dupId].symbol}.`;
 			}
 		}
 
-		if (!errors[id] && func.type != SwiValueType.UNDEFINED) {
-			const typeError = checkTypeConsistency(sdklib[id], func);
+		if (!errors[id] && swiEntry.type != SwiValueType.UNDEFINED) {
+			const typeError = checkTypeConsistency(swiEntry, sdkEntry);
 			if (typeError)
 				errors[id] = typeError;
 		}
@@ -102,30 +101,30 @@ export function analyzeSwilib(swilibConfig: SwilibConfig, platform: SwiPlatform,
 	};
 }
 
-function checkTypeConsistency(sdkEntry: SdkEntry, swilibEntry: SwiEntry): string | undefined {
+function checkTypeConsistency(swiEntry: SwiEntry, sdkEntry: SdkEntry): string | undefined {
 	const typesMap: Record<SwiType, SwiValueType[]> = {
 		[SwiType.FUNCTION]:		[SwiValueType.POINTER_TO_FLASH],
 		[SwiType.POINTER]:		[SwiValueType.POINTER_TO_FLASH, SwiValueType.POINTER_TO_RAM],
 		[SwiType.VALUE]:		[SwiValueType.VALUE],
 		[SwiType.EMPTY]:		[],
 	};
-	if (!typesMap[sdkEntry.type].includes(swilibEntry.type))
-		return `Type mismatch: ${getSwiValueTypeName(swilibEntry.type)} (SWILIB) is not allowed for ${getSwiTypeName(sdkEntry.type)} (SDK).`;
+	if (!typesMap[sdkEntry.type].includes(swiEntry.type))
+		return `Type mismatch: ${getSwiValueTypeName(swiEntry.type)} (SWILIB) is not allowed for ${getSwiTypeName(sdkEntry.type)} (SDK).`;
 	return undefined;
 }
 
-function isSameFunctions(swilibConfig: SwilibConfig, targetFunc: SdkEntry, checkFunc: SwiEntry) {
-	if (!targetFunc && !checkFunc)
+function isSameFunctions(config: SwilibConfig, swiEntry: SwiEntry, sdkEntry: SdkEntry) {
+	if (!sdkEntry && !swiEntry)
 		return true;
-	if (!targetFunc || !checkFunc)
+	if (!sdkEntry || !swiEntry)
 		return false;
-	if (targetFunc.id != checkFunc.id)
+	if (sdkEntry.id != swiEntry.id)
 		return false;
-	if (targetFunc.symbol == checkFunc.symbol)
+	if (sdkEntry.symbol == swiEntry.symbol)
 		return true;
-	if (isStrInArray(targetFunc.aliases, checkFunc.symbol))
+	if (isStrInArray(sdkEntry.aliases, swiEntry.symbol))
 		return true;
-	if (isStrInArray(swilibConfig.aliases.get(targetFunc.id), checkFunc.symbol))
+	if (isStrInArray(config.functions.aliases.get(sdkEntry.id), swiEntry.symbol))
 		return true;
 	return false;
 }
@@ -143,7 +142,7 @@ function isStrInArray(arr: string[] | undefined, search: string) {
 
 function getFunctionPairs(swilibConfig: SwilibConfig): Record<number, number[]> {
 	const functionPairs: Record<number, number[]> = {};
-	for (const p of swilibConfig.pairs) {
+	for (const p of swilibConfig.functions.pairs) {
 		for (let i = 0; i < p.length; i++)
 			functionPairs[p[i]] = p;
 	}

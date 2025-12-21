@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@npmcli/promise-spawn':
+        specifier: ^9.0.1
+        version: 9.0.1
       '@sie-js/vkp':
         specifier: ^2.0.1
         version: 2.0.1
@@ -21,6 +24,9 @@ importers:
       '@types/node':
         specifier: ^22.14.1
         version: 22.14.1
+      '@types/npmcli__promise-spawn':
+        specifier: ^6.0.3
+        version: 6.0.3
       '@types/sprintf-js':
         specifier: ^1.1.4
         version: 1.1.4
@@ -30,11 +36,18 @@ importers:
 
 packages:
 
+  '@npmcli/promise-spawn@9.0.1':
+    resolution: {integrity: sha512-OLUaoqBuyxeTqUvjA3FZFiXUfYC1alp3Sa99gW3EUDz3tZ3CbXDdcZ7qWKBzicrJleIgucoWamWH1saAmH/l2Q==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+
   '@sie-js/vkp@2.0.1':
     resolution: {integrity: sha512-fab9wJcf00X03c/szEGDtI6tx4f++nWAB6HknrfljlU0v5GQ4hQD5pwhh+AR2hA02ey8Z/vuAyAxGW8L0ubfBg==}
 
   '@types/node@22.14.1':
     resolution: {integrity: sha512-u0HuPQwe/dHrItgHHpmw3N2fYCR6x4ivMNbPHRkBVP4CvN+kiRrKHWk3i8tXiO/joPwXLMYvF9TTF0eqgHIuOw==}
+
+  '@types/npmcli__promise-spawn@6.0.3':
+    resolution: {integrity: sha512-4EQlesp5HtYHPXMXd4uuI+Q9hELEU0eVg/HBRLkqGC5U2ohwXZduCottmzPpb4tWCB+w4kQ3XNPlHIdXvCTyFw==}
 
   '@types/sprintf-js@1.1.4':
     resolution: {integrity: sha512-aWK1reDYWxcjgcIIPmQi3u+OQDuYa9b+lr6eIsGWrekJ9vr1NSjr4Eab8oQ1iKuH1ltFHpXGyerAv1a3FMKxzQ==}
@@ -55,6 +68,10 @@ packages:
 
   isarray@1.0.0:
     resolution: {integrity: sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==}
+
+  isexe@3.1.1:
+    resolution: {integrity: sha512-LpB/54B+/2J5hqQ7imZHfdU31OlgQqx7ZicVlkm9kzg9/w8GKLEcFfJl/t7DCEDueOyBAD6zCCwTO6Fzs0NoEQ==}
+    engines: {node: '>=16'}
 
   moo@0.5.2:
     resolution: {integrity: sha512-iSAJLHYKnX41mKcJKjqvnAN9sf0LMDTXDEvFv+ffuRR9a1MIuXLjMNL6EsnDHSkKLTWNqQQ5uo61P4EbU4NU+Q==}
@@ -95,7 +112,16 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
+  which@6.0.0:
+    resolution: {integrity: sha512-f+gEpIKMR9faW/JgAgPK1D7mekkFoqbmiwvNzuhsHetni20QSgzg9Vhn0g2JSJkkfehQnqdUAx7/e15qS1lPxg==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+    hasBin: true
+
 snapshots:
+
+  '@npmcli/promise-spawn@9.0.1':
+    dependencies:
+      which: 6.0.0
 
   '@sie-js/vkp@2.0.1':
     dependencies:
@@ -107,6 +133,10 @@ snapshots:
   '@types/node@22.14.1':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/npmcli__promise-spawn@6.0.3':
+    dependencies:
+      '@types/node': 22.14.1
 
   '@types/sprintf-js@1.1.4': {}
 
@@ -123,6 +153,8 @@ snapshots:
   inherits@2.0.4: {}
 
   isarray@1.0.0: {}
+
+  isexe@3.1.1: {}
 
   moo@0.5.2: {}
 
@@ -160,3 +192,7 @@ snapshots:
   undici-types@6.21.0: {}
 
   util-deprecate@1.0.2: {}
+
+  which@6.0.0:
+    dependencies:
+      isexe: 3.1.1
