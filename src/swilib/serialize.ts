@@ -80,8 +80,9 @@ export function getSwiBlib(swilib: Swilib): Buffer {
 	const blib = Buffer.alloc(16 * 1024);
 	for (let id = 0; id < 0x1000; id++) {
 		const offset = id * 4;
-		if (swilib.entries[id]?.value != null) {
-			blib.writeUInt32LE(swilib.entries[id].value, offset);
+		const swiEntry = swilib.entries[id];
+		if (swiEntry?.value != null) {
+			blib.writeUInt32LE(swiEntry.value, offset);
 		} else {
 			blib.writeUInt32LE(0xFFFFFFFF, offset);
 		}

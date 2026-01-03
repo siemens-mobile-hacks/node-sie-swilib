@@ -2,7 +2,7 @@ import { SwilibPattern } from "#src/patterns/parse.js";
 
 export function serializePatterns(patterns: SwilibPattern[]): string {
 	const lines = [`[Library]`];
-	for (let idStr in patterns) {
+	for (const idStr in patterns) {
 		const id = +idStr;
 
 		if (id && (id % 16) == 0)

@@ -26,7 +26,7 @@ export type SwiEntry = {
 
 export type Swilib = {
 	offset: number;
-	entries: SwiEntry[];
+	entries: Array<SwiEntry | undefined>;
 	target?: string;
 	platform: SwiPlatform;
 };

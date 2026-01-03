@@ -7,11 +7,11 @@ export interface SwilibPattern {
 	pattern?: string;
 }
 
-export function parsePatterns(code: string | Buffer): SwilibPattern[] {
+export function parsePatterns(code: string | Buffer): Array<SwilibPattern | undefined> {
 	if (Buffer.isBuffer(code))
 		code = vkpNormalize(code);
 
-	const patterns: SwilibPattern[] = [];
+	const patterns: Array<SwilibPattern | undefined> = [];
 	for (let line of code.split(/\n/)) {
 		line = line.replace(/;.*?$/i, '').trim();
 

@@ -31,7 +31,7 @@ export type SdkEntry = {
 };
 
 export type Sdklib = {
-	entries: SdkEntry[];
+	entries: Array<SdkEntry | undefined>;
 	platform: SwiPlatform;
 };
 
@@ -211,15 +211,15 @@ export async function parseLibraryFromSDK(sdkPath: string, platform: SwiPlatform
 	}
 
 	for (let id = 0; id < entries.length; id++) {
-		const func = entries[id];
-		if (!func)
+		const sdkEntry = entries[id];
+		if (!sdkEntry)
 			continue;
 
 		// Analyze type
-		func.type = detectSdkEntryType(entries[id]);
+		sdkEntry.type = detectSdkEntryType(entries[id]);
 
-		if (func.type == SwiType.POINTER && !func.pointerTo)
-			func.pointerTo = SdkPointerType.RAM;
+		if (sdkEntry.type == SwiType.POINTER && !sdkEntry.pointerTo)
+			sdkEntry.pointerTo = SdkPointerType.RAM;
 	}
 
 	return {

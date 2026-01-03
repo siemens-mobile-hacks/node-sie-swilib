@@ -36,8 +36,8 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 
 		totalCnt++;
 
-		if (!sdkEntry && swiEntry) {
-			errors[id] = `Unknown function: ${swiEntry.symbol}`;
+		if (!sdkEntry) {
+			errors[id] = `Unknown function: ${swiEntry!.symbol}`;
 			continue;
 		}
 
@@ -49,13 +49,13 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			}
 		}
 
-		if (sdkEntry && !swiEntry) {
+		if (!swiEntry) {
 			if (!sdkEntry.builtin)
 				missing.push(id);
 			continue;
 		}
 
-		if (sdkEntry?.builtin?.includes(platform) && swiEntry) {
+		if (sdkEntry.builtin?.includes(platform) && swiEntry) {
 			errors[id] = `Invalid function: ${swiEntry.symbol} (Reserved by ELFLoader)`;
 			continue;
 		}
@@ -74,7 +74,7 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			if (duplicates[swiEntry.value]) {
 				const dupId = duplicates[swiEntry.value];
 				if (!functionPairs[swiEntry.id] || !functionPairs[swiEntry.id].includes(dupId))
-					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib.entries[dupId].symbol}.`;
+					errors[id] = `Address already used for #${formatId(dupId)} ${sdklib.entries[dupId]?.symbol}.`;
 			}
 		}
 

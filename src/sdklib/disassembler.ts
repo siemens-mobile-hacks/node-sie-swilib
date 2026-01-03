@@ -48,7 +48,7 @@ export function getGhidraSymbols(swilibConfig: SwilibConfig, swilib: Swilib, sdk
 	for (let id = 0; id < sdklib.entries.length; id++) {
 		const swiEntry = swilib.entries[id];
 		const sdkEntry = sdklib.entries[id];
-		if (!swiEntry || swiEntry.value == null)
+		if (!sdkEntry || !swiEntry || swiEntry.value == null)
 			continue;
 		if (analysis.errors[id])
 			continue;
@@ -78,16 +78,16 @@ export function getIdaSymbols(swilibConfig: SwilibConfig, swilib: Swilib, sdklib
 		`static main() {`,
 	];
 	for (let id = 0; id < sdklib.entries.length; id++) {
-		const func = swilib.entries[id];
+		const swiEntry = swilib.entries[id];
 		const sdkEntry = sdklib.entries[id];
-		if (!func || func.value == null)
+		if (!sdkEntry || !swiEntry || swiEntry.value == null)
 			continue;
 		if (analysis.errors[id])
 			continue;
 		if (sdkEntry.type == SwiType.FUNCTION) {
-			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value & ~1)}, "${sdkEntry.symbol}");`);
+			symbols.push(`\tMakeName(${sprintf("0x%08X", swiEntry.value & ~1)}, "${sdkEntry.symbol}");`);
 		} else if (sdkEntry.type == SwiType.POINTER) {
-			symbols.push(`\tMakeName(${sprintf("0x%08X", func.value)}, "${sdkEntry.symbol}");`);
+			symbols.push(`\tMakeName(${sprintf("0x%08X", swiEntry.value)}, "${sdkEntry.symbol}");`);
 		}
 	}
 	symbols.push(`}`);
