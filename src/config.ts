@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import toml, { TomlTable } from 'smol-toml';
+import toml, { TomlTable, TomlValue } from 'smol-toml';
 
 export type SwiPlatform = 'ELKA' | 'NSG' | 'X75' | 'SG';
 
@@ -17,12 +17,14 @@ export interface SwilibConfig {
 	functions: {
 		pairs: number[][];
 		aliases: Map<number, string[]>;
+		reserved: Set<number>;
 	}
 }
 
 export function loadSwilibConfig(sdkPath: string): SwilibConfig {
 	const config = toml.parse(fs.readFileSync(`${sdkPath}/swilib/config.toml`).toString());
 	const functions = config["functions"] as TomlTable;
+	const reserved: Set<number> = new Set();
 
 	const aliases = new Map<number, string[]>();
 	for (const [key, value] of Object.entries(functions["aliases"]))
@@ -36,6 +38,13 @@ export function loadSwilibConfig(sdkPath: string): SwilibConfig {
 	for (const [key, value] of Object.entries(config["patches"]))
 		patches.set(key, value);
 
+	for (const value of functions["reserved"] as TomlValue[][]) {
+		const from = Number(value[0]);
+		const to = Number(value[1]);
+		for (let id = from; id <= to; id++)
+			reserved.add(id);
+	}
+
 	return {
 		targets: config["targets"] as string[],
 		patches,
@@ -43,6 +52,7 @@ export function loadSwilibConfig(sdkPath: string): SwilibConfig {
 		functions: {
 			pairs: functions["pairs"] as number[][],
 			aliases,
+			reserved,
 		}
 	};
 }
