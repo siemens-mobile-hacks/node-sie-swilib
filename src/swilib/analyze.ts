@@ -60,6 +60,11 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			continue;
 		}
 
+		if (config.functions.reserved.has(id) && swiEntry) {
+			errors[id] = `Invalid function: ${swiEntry.symbol} (Reserved by ELFLoader)`;
+			continue;
+		}
+
 		if (sdkEntry?.platforms && !sdkEntry.platforms!.includes(platform) && swiEntry) {
 			errors[id] = `Functions is not available on this platform.`;
 			continue;
