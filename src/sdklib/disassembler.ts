@@ -8,7 +8,7 @@ import promiseSpawn from "@npmcli/promise-spawn";
 export async function getDataTypesHeader(sdkPath: string, platform: SwiPlatform): Promise<string> {
 	const defines: Record<SwiPlatform, string[]> = {
 		NSG:  ["-DNEWSGOLD"],
-		ELKA: ["-DNEWSGOLD -DELKA"],
+		ELKA: ["-DNEWSGOLD", "-DELKA"],
 		X75:  ["-DX75"],
 		SG:   []
 	};
