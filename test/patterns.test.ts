@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { parsePatterns, prettifyPatterns } from "../src/index.js";
 
+const longCandidate = "BB,".repeat(50);
 const source = `
 [platforms]
 ALL = ["NSG", "ELKA", "SG", "X75"]
@@ -52,6 +53,19 @@ decl = "void original()"
 decl_SG = "void sg_decl()"
 decl_X75 = "void x75_decl()"
 ALL = "enabled"
+
+[009]
+decl = "void candidates()"
+NSG = [ "candidate1", "candidate2" ]
+
+[00A]
+decl = "void long_candidates()"
+NSG = [ "short", "${longCandidate}" ]
+
+[00B]
+decl = "void disabled_candidates()"
+NSG = [ "candidate1", "candidate2" ]
+ELKA = false
 `;
 
 describe("patterns.toml", () => {
@@ -69,6 +83,10 @@ describe("patterns.toml", () => {
 		expect(elka[4]?.symbol).toBe("inherited_decl");
 		expect(elka[4]?.pattern).toBe("line one,line two");
 		expect(elka[5]?.name).toBe("void platform_decl()");
+		expect(elka[9]?.pattern).toEqual(["candidate1", "candidate2"]);
+		expect(elka[10]?.pattern).toEqual(["short", longCandidate]);
+		expect(elka[11]).toBeUndefined();
+		expect(nsg[11]?.pattern).toEqual(["candidate1", "candidate2"]);
 
 		const sg = parsePatterns(source, "SG");
 		expect(sg[6]?.name).toBe("void sg_decl()");
@@ -87,6 +105,7 @@ describe("patterns.toml", () => {
 		const longSource = `${source}\n[008]\ndecl = "void long_pattern()"\nNSG = "${"AA,".repeat(50)}"\n`;
 		const formatted = prettifyPatterns(longSource);
 		expect(formatted).toMatch(/NSG = """\n.{108}\n/);
+		expect(formatted).toMatch(/NSG = \[\n\t"short",\n\t"""\n.{108}\n/);
 		expect(formatted.indexOf("[platforms]")).toBeLessThan(formatted.indexOf("[000]"));
 		expect(formatted.indexOf("[000]")).toBeLessThan(formatted.indexOf("[008]"));
 

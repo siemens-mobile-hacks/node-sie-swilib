@@ -22,20 +22,50 @@ export function prettifyPatterns(code: string): string {
 
 function formatPatternStrings(code: string, pattern: TomlTable): string {
 	for (const [scope, value] of Object.entries(pattern)) {
-		if (scope === "decl" || scope.startsWith("decl_") || typeof value !== "string")
+		if (scope === "decl" || scope.startsWith("decl_"))
 			continue;
 
-		const assignment = stringify({ [scope]: value }).trim();
-		if (assignment.length <= 120 || /["\\\r\n]/.test(value))
-			continue;
-
-		const prefix = assignment.slice(0, -JSON.stringify(value).length);
-		const lines = value.match(/.{1,108}/g)!;
-		code = code.replace(assignment, `${prefix}"""\n${lines.join("\n")}\n"""`);
+		if (typeof value === "string") {
+			const assignment = stringify({ [scope]: value }).trim();
+			code = code.replace(assignment, formatStringAssignment(assignment, value));
+		} else if (isStringArray(value)) {
+			const assignment = stringify({ [scope]: value }).trim();
+			if (assignment.length > 120) {
+				const prefix = stringify({ [scope]: [] }).trim().slice(0, -2);
+				const candidates = value.map(formatArrayCandidate).join("\n");
+				code = code.replace(assignment, `${prefix}[\n${candidates}\n]`);
+			}
+		}
 	}
 	return code;
 }
 
+function formatStringAssignment(assignment: string, value: string): string {
+	if (assignment.length <= 120 || /["\\\r\n]/.test(value))
+		return assignment;
+	const encoded = tomlString(value);
+	return `${assignment.slice(0, -encoded.length)}${multilineString(value)}`;
+}
+
+function formatArrayCandidate(value: string): string {
+	const encoded = tomlString(value);
+	if (`\t${encoded},`.length <= 120 || /["\\\r\n]/.test(value))
+		return `\t${encoded},`;
+	return `\t${multilineString(value)},`;
+}
+
+function multilineString(value: string): string {
+	return `"""\n${value.match(/.{1,108}/g)!.join("\n")}\n"""`;
+}
+
+function tomlString(value: string): string {
+	return stringify({ value }).trim().slice("value = ".length);
+}
+
 function isTomlTable(value: TomlValue | undefined): value is TomlTable {
 	return typeof value === "object" && value !== null && !Array.isArray(value) && !(value instanceof Date);
+}
+
+function isStringArray(value: TomlValue): value is string[] {
+	return Array.isArray(value) && value.every(item => typeof item === "string");
 }

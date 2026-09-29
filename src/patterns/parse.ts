@@ -4,7 +4,7 @@ export interface SwilibPattern {
 	id: number;
 	name: string;
 	symbol?: string;
-	pattern?: string;
+	pattern?: string | string[];
 }
 
 export function parsePatterns(code: string | Buffer, platform: string): Array<SwilibPattern | undefined> {
@@ -46,8 +46,8 @@ export function parsePatterns(code: string | Buffer, platform: string): Array<Sw
 		const pattern = lastValue(value, scopes);
 		if (pattern === undefined || pattern === false)
 			continue;
-		if (typeof pattern !== "string")
-			throw new Error(`Pattern ${idText} must be a string or false.`);
+		if (typeof pattern !== "string" && !isStringArray(pattern))
+			throw new Error(`Pattern ${idText} must be a string, an array of strings, or false.`);
 
 		const declarationScopes = ["decl", ...scopes
 			.filter(scope => scope !== "ALL")
@@ -61,7 +61,7 @@ export function parsePatterns(code: string | Buffer, platform: string): Array<Sw
 			id,
 			name: normalizedName,
 			symbol: parsePatternsFuncName(normalizedName),
-			pattern: pattern.trim().replace(/\r?\n[ \t]*/g, '') || undefined,
+			pattern: normalizePattern(pattern),
 		};
 	}
 
@@ -81,6 +81,16 @@ function isTomlTable(value: TomlValue | undefined): value is TomlTable {
 
 function isStringArray(value: TomlValue): value is string[] {
 	return Array.isArray(value) && value.every(item => typeof item === "string");
+}
+
+function normalizePattern(pattern: string | string[]): string | string[] | undefined {
+	if (typeof pattern === "string")
+		return normalizePatternString(pattern) || undefined;
+	return pattern.map(normalizePatternString);
+}
+
+function normalizePatternString(pattern: string): string {
+	return pattern.trim().replace(/\r?\n[ \t]*/g, '');
 }
 
 function parsePatternsFuncName(declaration: string): string | undefined {
