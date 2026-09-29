@@ -4,7 +4,7 @@ export interface SwilibPattern {
 	id: number;
 	name: string;
 	symbol?: string;
-	pattern?: string | string[];
+	pattern: string[];
 }
 
 export function parsePatterns(code: string | Buffer, platform: string): Array<SwilibPattern | undefined> {
@@ -61,7 +61,7 @@ export function parsePatterns(code: string | Buffer, platform: string): Array<Sw
 			id,
 			name: normalizedName,
 			symbol: parsePatternsFuncName(normalizedName),
-			pattern: normalizePattern(pattern),
+			pattern: normalizePatterns(pattern),
 		};
 	}
 
@@ -83,10 +83,10 @@ function isStringArray(value: TomlValue): value is string[] {
 	return Array.isArray(value) && value.every(item => typeof item === "string");
 }
 
-function normalizePattern(pattern: string | string[]): string | string[] | undefined {
-	if (typeof pattern === "string")
-		return normalizePatternString(pattern) || undefined;
-	return pattern.map(normalizePatternString);
+function normalizePatterns(pattern: string | string[]): string[] {
+	return (typeof pattern === "string" ? [pattern] : pattern)
+		.map(normalizePatternString)
+		.filter(Boolean);
 }
 
 function normalizePatternString(pattern: string): string {

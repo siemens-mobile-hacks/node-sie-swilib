@@ -71,17 +71,17 @@ ELKA = false
 describe("patterns.toml", () => {
 	test("resolves pattern inheritance and platform overrides", () => {
 		const nsg = parsePatterns(source, "NSG");
-		expect(nsg[0]?.pattern).toBe("common");
-		expect(nsg[1]?.pattern).toBe("newsgold");
+		expect(nsg[0]?.pattern).toEqual(["common"]);
+		expect(nsg[1]?.pattern).toEqual(["newsgold"]);
 		expect(nsg[2]?.symbol).toBe("SettingsAE_GetEntryList");
 
 		const elka = parsePatterns(Buffer.from(source), "ELKA");
-		expect(elka[1]?.pattern).toBe("elka");
+		expect(elka[1]?.pattern).toEqual(["elka"]);
 		expect(elka[2]).toBeUndefined();
-		expect(elka[3]?.pattern).toBeUndefined();
+		expect(elka[3]?.pattern).toEqual([]);
 		expect(elka[4]?.name).toBe("void inherited_decl()");
 		expect(elka[4]?.symbol).toBe("inherited_decl");
-		expect(elka[4]?.pattern).toBe("line one,line two");
+		expect(elka[4]?.pattern).toEqual(["line one,line two"]);
 		expect(elka[5]?.name).toBe("void platform_decl()");
 		expect(elka[9]?.pattern).toEqual(["candidate1", "candidate2"]);
 		expect(elka[10]?.pattern).toEqual(["short", longCandidate]);
