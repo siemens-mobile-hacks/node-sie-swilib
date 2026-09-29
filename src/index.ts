@@ -7,6 +7,6 @@ export * from '#src/sdklib/parse.js';
 export * from '#src/sdklib/disassembler.js';
 
 export * from '#src/patterns/parse.js';
-export * from '#src/patterns/serialize.js';
+export * from '#src/patterns/prettify.js';
 
 export * from '#src/config.js';
