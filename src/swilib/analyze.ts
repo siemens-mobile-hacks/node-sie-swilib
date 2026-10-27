@@ -11,6 +11,7 @@ export type SwilibAnalysisResult = {
 		good: number;
 		missing: number;
 		total: number;
+		unavailable: number;
 		unused: number;
 	};
 };
@@ -25,12 +26,19 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 	let goodCnt = 0;
 	let totalCnt = 0;
 	let unusedCnt = 0;
+	let unavailableCnt = 0;
 
 	for (let id = 0; id < maxFunctionId; id++) {
 		const swiEntry = swilib.entries[id];
 		const sdkEntry = sdklib.entries[id];
 		if (!sdkEntry && !swiEntry) {
 			unusedCnt++;
+			continue;
+		}
+
+		const isUnavailable = sdkEntry?.platforms != null && !sdkEntry.platforms.includes(platform);
+		if (isUnavailable && !swiEntry) {
+			unavailableCnt++;
 			continue;
 		}
 
@@ -65,7 +73,7 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			continue;
 		}
 
-		if (sdkEntry?.platforms && !sdkEntry.platforms!.includes(platform) && swiEntry) {
+		if (isUnavailable) {
 			errors[id] = `Functions is not available on this platform.`;
 			continue;
 		}
@@ -101,6 +109,7 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			good: goodCnt,
 			missing: missing.length,
 			total: totalCnt,
+			unavailable: unavailableCnt,
 			unused: unusedCnt
 		}
 	};
