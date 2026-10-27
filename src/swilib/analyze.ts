@@ -11,6 +11,7 @@ export type SwilibAnalysisResult = {
 		good: number;
 		missing: number;
 		total: number;
+		builtin: number;
 		unavailable: number;
 		unused: number;
 	};
@@ -27,6 +28,7 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 	let totalCnt = 0;
 	let unusedCnt = 0;
 	let unavailableCnt = 0;
+	let builtinCnt = 0;
 
 	for (let id = 0; id < maxFunctionId; id++) {
 		const swiEntry = swilib.entries[id];
@@ -37,8 +39,14 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 		}
 
 		const isUnavailable = sdkEntry?.platforms != null && !sdkEntry.platforms.includes(platform);
+		const isBuiltin = sdkEntry?.builtin?.includes(platform) ?? false;
 		if (isUnavailable && !swiEntry) {
 			unavailableCnt++;
+			continue;
+		}
+
+		if (isBuiltin && !swiEntry) {
+			builtinCnt++;
 			continue;
 		}
 
@@ -49,21 +57,20 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			continue;
 		}
 
+		if (!swiEntry) {
+			missing.push(id);
+			continue;
+		}
+
 		if (functionPairs[id]) {
 			const masterFunc = swilib.entries[functionPairs[id][0]];
-			if (masterFunc && (!swiEntry || masterFunc.value != swiEntry.value)) {
+			if (masterFunc && masterFunc.value != swiEntry.value) {
 				const expectedValue = masterFunc.value.toString(16).padStart(8, '0').toUpperCase();
 				errors[id] = `Address must be equal with #${formatId(masterFunc.id)} ${masterFunc.symbol} (0x${expectedValue}).`;
 			}
 		}
 
-		if (!swiEntry) {
-			if (!sdkEntry.builtin)
-				missing.push(id);
-			continue;
-		}
-
-		if (sdkEntry.builtin?.includes(platform) && swiEntry) {
+		if (isBuiltin) {
 			errors[id] = `Invalid function: ${swiEntry.symbol} (Reserved by ELFLoader)`;
 			continue;
 		}
@@ -109,6 +116,7 @@ export function analyzeSwilib(config: SwilibConfig, swilib: Swilib, sdklib: Sdkl
 			good: goodCnt,
 			missing: missing.length,
 			total: totalCnt,
+			builtin: builtinCnt,
 			unavailable: unavailableCnt,
 			unused: unusedCnt
 		}
